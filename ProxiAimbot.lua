@@ -720,11 +720,11 @@ hook_Add("CreateMove", "pa_CreateMoveEx", function(cmd)
 
 	local Silent = Cache.ConVars.Aimbot.Silent:GetBool()
 
-	if cmd:CommandNumber() == 0 then
-		if cmd:KeyDown(IN_USE) or not Silent then
-			Cache.FacingAngle = cmd:GetViewAngles()
-		end
+	if cmd:KeyDown(IN_USE) or not Silent then
+		Cache.FacingAngle = cmd:GetViewAngles()
+	end
 
+	if cmd:CommandNumber() == 0 then
 		cmd:SetViewAngles(Cache.FacingAngle)
 		return
 	end
@@ -841,7 +841,7 @@ hook_Add("CalcView", "", function(Player, EyePos, EyeAngles, FOV, ZNear, ZFar)
 		if wCalcView then
 			local WeaponAngle = angle_zero * 1
 
-			View.origin, WeaponAngle, View.fov = wCalcView(Weapon, Player, View.origin * 1, View.EyeAngles, View.fov)
+			View.origin, WeaponAngle, View.fov = wCalcView(Weapon, Player, View.origin * 1, View.angles, View.fov)
 
 			if not Cache.ConVars.Aimbot.AntiRecoil:GetBool() then
 				View.angles = WeaponAngle
