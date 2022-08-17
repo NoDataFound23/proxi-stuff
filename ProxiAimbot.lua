@@ -735,10 +735,11 @@ hook_Add("CreateMove", "pa_CreateMoveEx", function(cmd)
 
 	if Cache.ConVars.Aimbot.Backtrack:GetBool() then
 		for _, v in ipairs(Cache.Players) do
-			if not ValidEntity(v) then
+			if not ValidEntity(v) or PlayerInBuildMode(v) or PlayerInGodMode(v) or PlayerInOpposingHVHMode(v) then
 				Cache.AimbotData.Backtrack[v] = nil
 				continue
 			end
+
 
 			local pData = Cache.AimbotData.Backtrack[v] or {}
 
