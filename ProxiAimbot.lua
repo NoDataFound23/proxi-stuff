@@ -557,8 +557,7 @@ local function GetAimTarget()
 
 		if Cache.ConVars.Aimbot.Backtrack:GetBool() and Cache.AimbotData.Backtrack[v] then
 			for _, h in ipairs(Cache.AimbotData.Backtrack[v]) do
-				for i = #Cache.AimbotData.ScanOrder, 1, -1 do
-					local Set = Cache.AimbotData.ScanOrder[i]
+				for _, Set in ipairs(Cache.AimbotData.ScanOrder) do
 					if not h.hData[Set] then continue end
 
 					for _, hPos in ipairs(h.hData[Set]) do
@@ -568,10 +567,7 @@ local function GetAimTarget()
 						if not IsVisible(hPos) then continue end
 
 						if Cur < Best then
-							Best = Cur
-							Entity = v
-							bPos = hPos
-							bTick = h.Tick
+							return v, hPos, h.Tick
 						end
 					end
 				end
