@@ -10,7 +10,7 @@
 		- Bullettime
 		- Movement fix
 		- 0.2 second backtrack
-
+		- No lerp
 
 	Requires proxi (Duh)
 	Requires https://github.com/awesomeusername69420/miscellaneous-gmod-stuff/blob/main/Includes/modules/md5.lua (Anti Spread)
