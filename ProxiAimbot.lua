@@ -509,6 +509,21 @@ local function PosInFOV(Pos)
 	return DistanceFromCrosshair(Pos) <= Cache.ConVars.Aimbot.FOV:GetInt()
 end
 
+local function IsVisible(Pos, Entity)
+	local tr = util_TraceLine({
+		start = Cache.LocalPlayer:EyePos(),
+		endpos = Pos,
+		filter = Cache.LocalPlayer,
+		mask = MASK_SHOT
+	})
+
+	if IsValid(Entity) then
+		return tr.Entity == Entity
+	else
+		return tr.Fraction >= 0.98
+	end
+end
+
 local function GetAimTarget()
 	local Max = Cache.ConVars.Aimbot.FOV:GetInt()
 	local Best = math_huge
@@ -524,14 +539,13 @@ local function GetAimTarget()
 
 		if Cache.ConVars.Aimbot.Backtrack:GetBool() and Cache.AimbotData.Backtrack[v] then
 			for _, h in ipairs(Cache.AimbotData.Backtrack[v]) do
-				for i = #Cache.AimbotData.ScanOrder, 1, -1 do
-					local Set = Cache.AimbotData.ScanOrder[i]
+				for _, Set in ipairs(Cache.AimbotData.ScanOrder) do
 					if not h.hData[Set] then continue end
 
 					for _, hPos in ipairs(h.hData[Set]) do
 						Cur = DistanceFromCrosshair(hPos)
-
 						if Cur > Max then continue end
+						if not IsVisible(hPos) then continue end
 
 						if Cur < Best then
 							Best = Cur
@@ -553,15 +567,6 @@ local function GetAimTarget()
 	end
 
 	return Entity, bPos, bTick
-end
-
-local function IsVisible(Pos, Entity)
-	return util_TraceLine({
-		start = Cache.LocalPlayer:EyePos(),
-		endpos = Pos,
-		filter = Cache.LocalPlayer,
-		mask = MASK_SHOT
-	}).Entity == Entity
 end
 
 local function GetEntityHitboxes(Entity)
