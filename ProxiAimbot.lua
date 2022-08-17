@@ -858,7 +858,7 @@ hook_Add("CalcView", "", function(Player, EyePos, EyeAngles, FOV, ZNear, ZFar)
 	local Vehicle = Player:GetVehicle()
 
 	if IsValid(Vehicle) then
-		UpdateCalcViewData(view)
+		UpdateCalcViewData(View)
 
 		return hook.Run("CalcVehicleView", Vehicle, Player, View)
 	end
