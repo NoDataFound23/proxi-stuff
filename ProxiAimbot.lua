@@ -548,7 +548,7 @@ local function GetAimTarget()
 
 		local Cur, WasW2S = DistanceFromCrosshair(v:WorldSpaceCenter())
 
-		if (WasW2S and Cur <= WMax) or (not WasW2S and Cur <= AMax) then
+		if Cur <= (WasW2S and WMax or AMax) then
 			if Cur < Best then
 				Best = Cur
 				Entity = v
@@ -562,8 +562,7 @@ local function GetAimTarget()
 
 					for _, hPos in ipairs(h.hData[Set]) do
 						Cur, WasW2S = DistanceFromCrosshair(hPos)
-						if WasW2S and Cur > WMax then continue end
-						if not WasW2S and Cur > AMax then continue end
+						if Cur > (WasW2S and WMax or AMax) then continue  end
 						if not IsVisible(hPos) then continue end
 
 						if Cur < Best then
