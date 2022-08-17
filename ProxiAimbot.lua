@@ -501,18 +501,24 @@ local function DistanceFromCrosshair(Pos)
 	local sPos = Pos:ToScreen()
 
 	if sPos.visible then
-		return math_Distance(Cache.ScrW / 2, Cache.ScrH / 2, sPos.x, sPos.y)
+		return math_Distance(Cache.ScrW / 2, Cache.ScrH / 2, sPos.x, sPos.y), true
 	else
 		local Forward = Cache.FacingAngle:Forward()
 		local Distance = (Pos - Cache.LocalPlayer:EyePos()):GetNormalized()
 
 		local Degree = math_deg(math_acos(Forward:Dot(Distance)))
-		return math_abs(Degree)
+		return math_abs(Degree), false
 	end
 end
 
 local function PosInFOV(Pos)
-	return DistanceFromCrosshair(Pos) <= Cache.ConVars.Aimbot.FOV:GetInt()
+	local Dist, WasW2S = DistanceFromCrosshair(Pos)
+
+	if WasW2S then
+		return Dist <= GetFOVRadius()
+	else
+		return Dist <= Cache.ConVars.Aimbot.FOV:GetInt()
+	end
 end
 
 local function IsVisible(Pos, Entity)
@@ -531,7 +537,9 @@ local function IsVisible(Pos, Entity)
 end
 
 local function GetAimTarget()
-	local Max = Cache.ConVars.Aimbot.FOV:GetInt()
+	local AMax = Cache.ConVars.Aimbot.FOV:GetInt()
+	local WMax = GetFOVRadius()
+
 	local Best = math_huge
 	local Entity = NULL
 
@@ -542,7 +550,14 @@ local function GetAimTarget()
 		if not ValidEntity(v) then continue end
 		if PlayerInBuildMode(v) or PlayerInGodMode(v) or PlayerInOpposingHVHMode(v) then continue end
 
-		local Cur = DistanceFromCrosshair(v:WorldSpaceCenter())
+		local Cur, WasW2S = DistanceFromCrosshair(v:WorldSpaceCenter())
+
+		if (WasW2S and Cur <= WMax) or (not WasW2S and Cur <= AMax) then
+			if Cur < Best then
+				Best = Cur
+				Entity = v
+			end
+		end
 
 		if Cache.ConVars.Aimbot.Backtrack:GetBool() and Cache.AimbotData.Backtrack[v] then
 			for _, h in ipairs(Cache.AimbotData.Backtrack[v]) do
@@ -551,8 +566,9 @@ local function GetAimTarget()
 					if not h.hData[Set] then continue end
 
 					for _, hPos in ipairs(h.hData[Set]) do
-						Cur = DistanceFromCrosshair(hPos)
-						if Cur > Max then continue end
+						Cur, WasW2S = DistanceFromCrosshair(hPos)
+						if WasW2S and Cur > WMax then continue end
+						if not WasW2S and Cur > AMax then continue end
 						if not IsVisible(hPos) then continue end
 
 						if Cur < Best then
@@ -564,13 +580,6 @@ local function GetAimTarget()
 					end
 				end
 			end
-		end
-		
-		if Cur > Max then continue end
-
-		if Cur < Best then
-			Best = Cur
-			Entity = v
 		end
 	end
 
