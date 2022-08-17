@@ -146,6 +146,8 @@ local Cache = {
 		fov_desired = pGetConVar("fov_desired"),
 
 		Aimbot = {
+			DEBUGMODE = CreateClientConVar("pa_debug", 0, false, false, "", 0, 1),
+			
 			AnimLerp = CreateClientConVar("pa_animlerp", 1, true, false, "", 0, 1),
 
 			Enabled = CreateClientConVar("pa_enabled", 1, true, false, "", 0, 1),
@@ -454,9 +456,7 @@ local function CalculateNoSpread(Weapon, cmd, pAngle)
 end
 
 local function GetWeaponBase(Weapon)
-	if not Weapon.Base then
-		return ""
-	end
+	if not Weapon.Base then return "" end
 
 	return string_Split(string_lower(Weapon.Base), "_")[1]
 end
@@ -467,9 +467,7 @@ local function WeaponCanShoot(Weapon)
 	local WeaponName = string_lower(Weapon:GetPrintName())
 
 	for _, v in ipairs(Cache.WeaponData.BlacklistClasses) do
-		if WeaponName == v then
-			return false
-		end
+		if WeaponName == v then return false end
 
 		if WeaponName:find(v) then
 			local breakouter = false
@@ -481,9 +479,7 @@ local function WeaponCanShoot(Weapon)
 				end
 			end
 
-			if breakouter then
-				continue
-			end
+			if breakouter then continue end
 
 			return false
 		end
@@ -629,6 +625,8 @@ local function GetAvailablePositions(Entity)
 	end
 
 	for k, _ in pairs(hData) do
+		if not phData[k] or not hData[k] then continue end
+
 		for _, x in ipairs(phData[k]) do
 			hData[k][#hData[k] + 1] = x
 
@@ -636,11 +634,7 @@ local function GetAvailablePositions(Entity)
 		end
 	end
 
-	if EMPTY then
-		return nil
-	end
-
-	return hData
+	return EMPTY and nil or hData
 end
 
 local function GetAimPosition(Entity)
@@ -870,6 +864,28 @@ hook.Add("PrePlayerDraw", "pa_PrePlayerDraw", function(Player)
 	if Player == Cache.LocalPlayer then return end
 
 	Player:AnimResetGestureSlot(GESTURE_SLOT_VCD)
+end)
+
+hook_Add("PreDrawEffects", "pa_PreDrawEffects", function() -- Debug
+	if Cache.ConVars.Aimbot.DEBUGMODE:GetBool() and Cache.ConVars.Aimbot.Backtrack:GetBool() then
+		local Mins = Vector(-1, -1, -1)
+		local Maxs = Vector(1, 1, 1)
+
+		for _, d in pairs(Cache.AimbotData.Backtrack) do
+			for i = 1, #d do
+				local h = d[i]
+
+				for i = #Cache.AimbotData.ScanOrder, 1, -1 do
+					local Set = Cache.AimbotData.ScanOrder[i]
+					if not h.hData[Set] then continue end
+
+					for _, hPos in ipairs(h.hData[Set]) do
+						render.DrawWireframeBox(hPos, angle_zero, Mins, Maxs, Cache.Colors.White, false)
+					end
+				end
+			end
+		end
+	end
 end)
 
 hook_Add("OnScreenSizeChanged", "pa_OnScreenSizeChanged", function()
