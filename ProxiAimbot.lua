@@ -887,24 +887,10 @@ hook_Add("CalcView", "", function(Player, EyePos, EyeAngles, FOV, ZNear, ZFar)
 	return View
 end)
 
-hook_Add("PreDrawEffects", "pa_PreDrawEffects", function() -- Debug
-	if Cache.ConVars.Aimbot.Backtrack:GetBool() then
-		for _, d in pairs(Cache.AimbotData.Backtrack) do
-			for i = 1, #d do
-				for _, h in ipairs(d[i].hData) do
-					for _, v in pairs(h) do
-						debugoverlay.Box(v, Vector(-1, -1, -1), Vector(1, 1, 1), Cache.TickInterval, PosInFOV(v) and Color(0, 255, 0) or color_white)
-					end
-				end
-			end
-		end
-	end
-end)
-
 hook.Add("PrePlayerDraw", "pa_PrePlayerDraw", function(Player)
 	if not Cache.ConVars.Aimbot.AntiGesture:GetBool() then return end
 	if Player == Cache.LocalPlayer then return end
-	
+
 	Player:AnimResetGestureSlot(GESTURE_SLOT_VCD)
 end)
 
