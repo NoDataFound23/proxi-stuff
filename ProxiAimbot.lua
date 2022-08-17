@@ -60,6 +60,7 @@ local tobool = tobool
 local player_GetAll = player.GetAll
 
 local math_Clamp = math.Clamp
+local math_Distance = math.Distance
 local math_NormalizeAngle = math.NormalizeAngle
 local math_abs = math.abs
 local math_acos = math.acos
@@ -497,11 +498,17 @@ end
 local function DistanceFromCrosshair(Pos)
 	if not Pos then return 360 end
 
-	local Forward = Cache.FacingAngle:Forward()
-	local Distance = (Pos - Cache.LocalPlayer:EyePos()):GetNormalized()
+	local sPos = Pos:ToScreen()
 
-	local Degree = math_deg(math_acos(Forward:Dot(Distance)))
-	return math_abs(Degree)
+	if sPos.visible then
+		return math_Distance(Cache.ScrW / 2, Cache.ScrH / 2, sPos.x, sPos.y)
+	else
+		local Forward = Cache.FacingAngle:Forward()
+		local Distance = (Pos - Cache.LocalPlayer:EyePos()):GetNormalized()
+
+		local Degree = math_deg(math_acos(Forward:Dot(Distance)))
+		return math_abs(Degree)
+	end
 end
 
 local function PosInFOV(Pos)
