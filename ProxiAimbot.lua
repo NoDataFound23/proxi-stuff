@@ -1,8 +1,19 @@
 --[[
 	https://github.com/leme6156/proxi-stuff
 
+	Features:
+		- Engine Prediction
+		- Auto shoot
+		- Anti Spread
+		- Anti Recoil
+		- Silent Aim
+		- Bullettime
+		- Movement fix
+		- 0.2 second backtrack
+
+
 	Requires proxi (Duh)
-	Requires https://github.com/awesomeusername69420/miscellaneous-gmod-stuff/blob/main/Includes/modules/md5.lua (NoSpread)
+	Requires https://github.com/awesomeusername69420/miscellaneous-gmod-stuff/blob/main/Includes/modules/md5.lua (Anti Spread)
 ]]
 
 local IsIdiot = false
