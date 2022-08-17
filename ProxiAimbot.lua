@@ -33,7 +33,6 @@ local Angle = Angle
 local Color = Color
 local CreateClientConVar = CreateClientConVar
 local CurTime = CurTime
-local IsFirstTimePredicted = IsFirstTimePredicted
 local IsValid = IsValid
 local LocalPlayer = LocalPlayer
 local ScrH = ScrH
@@ -80,6 +79,7 @@ local hook_Add = hook.Add
 local timer_Create = timer.Create
 
 local table_GetKeys = table.GetKeys
+local table_remove = table.remove
 
 local util_TraceLine = util.TraceLine
 
@@ -95,7 +95,6 @@ local pDisableAnimInterp = proxi.DisableAnimInterp
 local pSetInterpolationEnabled = proxi.SetInterpolationEnabled
 
 local Cache = {
-	ServerTime = CurTime(),
 	TickInterval = engine.TickInterval(),
 
 	ScrW = ScrW(),
@@ -141,7 +140,8 @@ local Cache = {
 			FixMovement = CreateClientConVar("pa_fix_movement", 1, true, false, "", 0, 1),
 			AntiSpread = CreateClientConVar("pa_anti_spread", 1, true, false, "", 0, 1),
 			AntiRecoil = CreateClientConVar("pa_anti_recoil", 1, true, false, "", 0, 1),
-			AutoShoort = CreateClientConVar("pa_auto_shoot", 1, true, false, "", 0, 1),
+			AutoShoot = CreateClientConVar("pa_auto_shoot", 1, true, false, "", 0, 1),
+			Backtrack = CreateClientConVar("pa_backtrac", 1, true, false, "", 0, 1),
 
 			FOVOutline = CreateClientConVar("pa_fov_color_outline", "255 255 255 255", true, false, "")
 		}
@@ -267,7 +267,9 @@ local Cache = {
 			HITGROUP_HEAD,
 			HITGROUP_CHEST,
 			HITGROUP_STOMACH
-		}
+		},
+
+		Backtrack = {}
 	},
 
 	Players = {}
@@ -334,6 +336,14 @@ local function TimeToTick(Time)
 	return math.floor(0.5 + (Time / Cache.TickInterval))
 end
 
+local function TickToTime(Tick)
+	return Cache.TickInterval * Tick
+end
+
+local function GetServerTime()
+	return TickToTime(Cache.LocalPlayer:GetInternalVariable("m_nTickBase"))
+end
+
 local function UpdateCalcViewData(View)
 	Cache.CalcViewData.origin = View.origin * 1
 	Cache.CalcViewData.angles = View.angles * 1
@@ -388,6 +398,8 @@ local function CalculateViewPunch(Weapon)
 end
 
 local function CalculateNoSpread(Weapon, cmd, pAngle)
+	if not Cache.ConVars.Aimbot.AntiSpread:GetBool() then return pAngle end
+
 	local WeaponCone = Cache.WeaponData.SpreadCones[Weapon:GetClass()]
 
 	if not md5 or not WeaponCone then
@@ -449,7 +461,7 @@ local function WeaponCanShoot(Weapon)
 	local Base = GetWeaponBase(Weapon)
 	local ExtraCheck = Cache.WeaponData.ShootChecks[Base] and stuff.ExtraChecks[Base](Weapon) or true
 
-	return Cache.ServerTime >= Weapon:GetNextPrimaryFire() and ExtraCheck
+	return GetServerTime() >= Weapon:GetNextPrimaryFire() and ExtraCheck
 end
 
 local function DistanceFromCrosshair(Pos)
@@ -462,15 +474,42 @@ local function DistanceFromCrosshair(Pos)
 	return math_abs(Degree)
 end
 
+local function PosInFOV(Pos)
+	return DistanceFromCrosshair(Pos) <= Cache.ConVars.Aimbot.FOV:GetInt()
+end
+
 local function GetAimTarget()
 	local Max = Cache.ConVars.Aimbot.FOV:GetInt()
 	local Best = math_huge
 	local Entity = NULL
 
+	local bPos = nil
+	local bTick = nil
+
 	for _, v in ipairs(Cache.Players) do
 		if not ValidEntity(v) then continue end
 
 		local Cur = DistanceFromCrosshair(v:WorldSpaceCenter())
+
+		if Cache.ConVars.Aimbot.Backtrack:GetBool() and Cache.AimbotData.Backtrack[v] then
+			for _, h in ipairs(Cache.AimbotData.Backtrack[v]) do
+				for _, Set in ipairs(Cache.AimbotData.ScanOrder) do
+					for _, hPos in ipairs(h.hData[Set]) do
+						Cur = DistanceFromCrosshair(hPos)
+
+						if Cur > Max then continue end
+
+						if Cur < Best then
+							Best = Cur
+							Entity = v
+							bPos = hPos
+							bTick = h.Tick
+						end
+					end
+				end
+			end
+		end
+		
 		if Cur > Max then continue end
 
 		if Cur < Best then
@@ -479,7 +518,7 @@ local function GetAimTarget()
 		end
 	end
 
-	return Entity
+	return Entity, bPos, bTick
 end
 
 local function IsVisible(Pos, Entity)
@@ -491,19 +530,17 @@ local function IsVisible(Pos, Entity)
 	}).Entity == Entity
 end
 
-local function GetAvailablePositions(Entity)
-	local EMPTY = true
-
+local function GetEntityHitboxes(Entity)
 	local hData = {}
 
-	for _, v in ipairs(table_GetKeys(Cache.AimbotData.ScanOrder)) do
-		hData[v] = {}
-	end
+	Entity:SetupBones()
 
 	for HitSet = 0, Entity:GetHitboxSetCount() - 1 do
 		for HitBox = 0, Entity:GetHitBoxCount(HitSet) - 1 do
 			local HitGroup = Entity:GetHitBoxHitGroup(HitBox, HitSet)
-			if not HitGroup or not hData[HitGroup] then continue end
+			if not HitGroup then continue end
+
+			hData[HitGroup] = hData[HitGroup] or {}
 
 			local Bone = Entity:GetHitBoxBone(HitBox, HitSet)
 			local Mins, Maxs = Entity:GetHitBoxBounds(HitBox, HitSet)
@@ -519,6 +556,25 @@ local function GetAvailablePositions(Entity)
 			Maxs:Rotate(Ang)
 
 			hData[HitGroup][#hData[HitGroup] + 1] = Pos + ((Mins + Maxs) / 2)
+		end
+	end
+
+	return hData
+end
+
+local function GetAvailablePositions(Entity)
+	local EMPTY = true
+
+	local phData = GetEntityHitboxes(Entity)
+	local hData = {}
+
+	for _, v in ipairs(table_GetKeys(Cache.AimbotData.ScanOrder)) do
+		hData[v] = {}
+	end
+
+	for k, _ in pairs(hData) do
+		for _, x in ipairs(phData[k]) do
+			hData[k][#hData[k] + 1] = x
 
 			EMPTY = false
 		end
@@ -575,12 +631,6 @@ end)
 
 --------------------------- Hooks ---------------------------
 
-hook_Add("Move", "pa_Move", function()
-	if not IsFirstTimePredicted() then return end
-
-	Cache.ServerTime = CurTime() + Cache.TickInterval
-end)
-
 hook_Add("EntityFireBullets", "pa_EntityFireBullets", function(Entity, Data)
 	if Entity ~= Cache.LocalPlayer then return end
 
@@ -634,23 +684,55 @@ hook_Add("CreateMove", "pa_CreateMoveEx", function(cmd)
 		return
 	end
 
+	-- Setup backtrack points
+
+	if Cache.ConVars.Aimbot.Backtrack:GetBool() then
+		for _, v in ipairs(Cache.Players) do
+			if not ValidEntity(v) then
+				Cache.AimbotData.Backtrack[v] = nil
+				continue
+			end
+
+			local pData = Cache.AimbotData.Backtrack[v] or {}
+
+			pData[#pData + 1] = {
+				hData = GetEntityHitboxes(v),
+				Tick = TimeToTick(GetEntitySimTime(v))
+			}
+
+			Cache.AimbotData.Backtrack[v] = pData
+		end
+
+		local ServerTime = GetServerTime()
+
+		for _, d in pairs(Cache.AimbotData.Backtrack) do
+			for i = #d, 1, -1 do
+				local dTime = TickToTime(d[i].Tick)
+
+				if ServerTime - dTime >= 0.2 then
+					table_remove(d, i)
+				end
+			end
+		end
+	end
+
 	-- Aimbot
 
 	local Weapon = Cache.LocalPlayer:GetActiveWeapon()
 
 	if input_IsButtonDown(Cache.ConVars.Aimbot.Key:GetInt()) and IsValid(Weapon) and WeaponCanShoot(Weapon) then
-		local Target = GetAimTarget()
+		local Target, bPos, bTick = GetAimTarget()
 		if not IsValid(Target) then return end
 
 		Cache.AimbotData.Target = Target
 
-		local Pos = GetAimPosition(Target)
+		local Pos = bPos or GetAimPosition(Target)
 		if not Pos then return end
 
-		local TargetSimTime = GetEntitySimTime(Target)
+		local TargetSimTime = bTick or TimeToTick(GetEntitySimTime(Target))
 
 		if TargetSimTime ~= math_huge then
-			cmd:SetTickCount(TimeToTick(TargetSimTime))
+			cmd:SetTickCount(TargetSimTime)
 		end
 
 		pStartPrediction(cmd)
@@ -658,7 +740,10 @@ hook_Add("CreateMove", "pa_CreateMoveEx", function(cmd)
 			local sAngle = CalculateNoSpread(Weapon, cmd, pAngle)
 
 			cmd:SetViewAngles(sAngle - CalculateViewPunch(Weapon))
-			cmd:AddKey(IN_ATTACK)
+
+			if Cache.ConVars.Aimbot.AutoShoot:GetBool() then
+				cmd:AddKey(IN_ATTACK)
+			end
 
 			if Cache.ConVars.Aimbot.FixMovement:GetBool() then
 				FixMovement(cmd)
@@ -721,6 +806,20 @@ hook_Add("CalcView", "", function(Player, EyePos, EyeAngles, FOV, ZNear, ZFar)
 	UpdateCalcViewData(View)
 
 	return View
+end)
+
+hook_Add("PreDrawEffects", "pa_PreDrawEffects", function() -- Debug
+	if Cache.ConVars.Aimbot.Backtrack:GetBool() then
+		for _, d in pairs(Cache.AimbotData.Backtrack) do
+			for i = 1, #d do
+				for _, h in ipairs(d[i].hData) do
+					for _, v in pairs(h) do
+						debugoverlay.Box(v, Vector(-1, -1, -1), Vector(1, 1, 1), Cache.TickInterval, PosInFOV(v) and Color(0, 255, 0) or color_white)
+					end
+				end
+			end
+		end
+	end
 end)
 
 hook_Add("OnScreenSizeChanged", "pa_OnScreenSizeChanged", function()
