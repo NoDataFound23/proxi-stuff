@@ -353,8 +353,6 @@ local function FixAngle(Angle)
 end
 
 local function GetEntitySimTime(Entity)
-	if not IsValid(Entity) then return math_huge end
-
 	return proxi.__Ent_GetNetVar(Entity, "DT_BaseEntity->m_flSimulationTime", 1)
 end
 
@@ -385,42 +383,40 @@ local function UpdateCalcViewData(View)
 	Cache.CalcViewData.znear = View.znear
 end
 
-local function GenerateFOVPoly()
-	local X = Cache.ScrW / 2
-	local Y = Cache.ScrH / 2
-
-	local FOVRad = (math_tan(math_rad(Cache.ConVars.Aimbot.FOV:GetInt())) / math_tan(math_rad(GetViewFOV() / 2)) * Cache.ScrW) / GetViewZNear()
-
-	local cir = {
-		{
-			x = X,
-			y = Y,
-			u = 0.5,
-			v = 0.5
-		}
-	}
-
-	for i = 0, 64 do
-		local rad = math_rad((i / 64) * -360)
-
-		cir[#cir + 1] = {
-			x = X + (math_sin(rad) * FOVRad),
-			y = Y + (math_cos(rad) * FOVRad),
-			u = (math_sin(rad) / 2) + 0.5,
-			v = (math_cos(rad) / 2) + 0.5
-		}
+local function PlayerInBuildMode(Player)
+	for _, v in ipairs(Cache.NetVars.BuildMode) do
+		if Player:GetNWBool(v, false) then
+			return true
+		end
 	end
 
-	local Orad = math_rad(0)
+	return false
+end
 
-	cir[#cir + 1] = {
-		x = X + (math_sin(Orad) * FOVRad),
-		y = Y + (math_cos(Orad) * FOVRad),
-		u = (math_sin(Orad) / 2) + 0.5,
-		v = (math_cos(Orad) / 2) + 0.5
-	}
+local function PlayerInGodMode(Player)
+	if Player:HasGodMode() then return true end
 
-	Cache.AimbotData.FOVPoly = cir
+	for _, v in ipairs(Cache.NetVars.GodMode) do
+		if Player:GetNWBool(v, false) then
+			return true
+		end
+	end
+
+	return false
+end
+
+local function PlayerInOpposingHVHMode(Player)
+	local LocalHvH = false
+	local PlayerHvH = false
+
+	for _, v in ipairs(Cache.NetVars.HvHMode) do
+		if LocalHvH and PlayerHvH then break end
+
+		LocalHvH = Cache.LocalPlayer:GetNWBool(v, false)
+		PlayerHvH = Player:GetNWBool(v, false)
+	end
+
+	return LocalHvH ~= PlayerHvH
 end
 
 local function CalculateViewPunch(Weapon)
@@ -537,6 +533,7 @@ local function GetAimTarget()
 
 	for _, v in ipairs(Cache.Players) do
 		if not ValidEntity(v) then continue end
+		if PlayerInBuildMode(v) or PlayerInGodMode(v) or PlayerInOpposingHVHMode(v) then continue end
 
 		local Cur = DistanceFromCrosshair(v:WorldSpaceCenter())
 
@@ -666,42 +663,6 @@ local function FixMovement(cmd)
 	cmd:SetSideMove(math_sin(Yaw) * Speed)
 end
 
-local function PlayerInBuildMode(Player)
-	for _, v in ipairs(Cache.NetVars.BuildMode) do
-		if Player:GetNWBool(v, false) then
-			return true
-		end
-	end
-
-	return false
-end
-
-local function PlayerInGodMode(Player)
-	if Player:HasGodMode() then return true end
-
-	for _, v in ipairs(Cache.NetVars.GodMode) do
-		if Player:GetNWBool(v, false) then
-			return true
-		end
-	end
-
-	return false
-end
-
-local function PlayerInOpposingHVHMode(Player)
-	local LocalHvH = false
-	local PlayerHvH = false
-
-	for _, v in ipairs(Cache.NetVars.HvHMode) do
-		if LocalHvH and PlayerHvH then break end
-
-		LocalHvH = Cache.LocalPlayer:GetNWBool(v, false)
-		PlayerHvH = Player:GetNWBool(v, false)
-	end
-
-	return LocalHvH ~= PlayerHvH
-end
-
 --------------------------- Timers ---------------------------
 
 timer_Create("pa_Update", 0.3, 0, function()
@@ -802,17 +763,17 @@ hook_Add("CreateMove", "pa_CreateMoveEx", function(cmd)
 	if input_IsButtonDown(Cache.ConVars.Aimbot.Key:GetInt()) and IsValid(Weapon) and WeaponCanShoot(Weapon) then
 		local Target, bPos, bTick = GetAimTarget()
 		if not IsValid(Target) then return end
-		if PlayerInBuildMode(Target) or PlayerInGodMode(Target) or PlayerInOpposingHVHMode(Target) then return end
 
 		Cache.AimbotData.Target = Target
 
 		local Pos = bPos or GetAimPosition(Target)
 		if not Pos then return end
 
-		local TargetSimTime = bTick or TimeToTick(GetEntitySimTime(Target))
+		local TargetSimTime = bTick and TickToTime(bTick) or GetEntitySimTime(Target)
+		local TargetSimTick = bTick or TimeToTick(TargetSimTime)
 
-		if TargetSimTime ~= math_huge then
-			cmd:SetTickCount(TargetSimTime)
+		if ServerTime - TargetSimTime <= 0.2 then
+			cmd:SetTickCount(TargetSimTick)
 		end
 
 		pStartPrediction(cmd)
@@ -905,9 +866,6 @@ end)
 cvars_AddChangeCallback("pa_fov_color_outline", function(_, _, NewValue)
 	Cache.Colors.FOV.Outline = string_ToColor(NewValue)
 end)
-
-cvars_AddChangeCallback("pa_fov", GenerateFOVPoly)
-GenerateFOVPoly() -- Force generation of a circle
 
 cvars_AddChangeCallback("pa_animlerp", function(_, _, NewValue)
 	pDisableAnimInterp(not tobool(NewValue))
