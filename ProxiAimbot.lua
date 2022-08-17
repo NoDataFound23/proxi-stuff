@@ -542,7 +542,8 @@ local function GetAimTarget()
 
 		if Cache.ConVars.Aimbot.Backtrack:GetBool() and Cache.AimbotData.Backtrack[v] then
 			for _, h in ipairs(Cache.AimbotData.Backtrack[v]) do
-				for _, Set in ipairs(Cache.AimbotData.ScanOrder) do
+				for i = #Cache.AimbotData.ScanOrder, 1, -1 do
+					local Set = Cache.AimbotData.ScanOrder[i]
 					if not h.hData[Set] then continue end
 
 					for _, hPos in ipairs(h.hData[Set]) do
@@ -764,6 +765,8 @@ hook_Add("CreateMove", "pa_CreateMoveEx", function(cmd)
 
 	-- Setup backtrack points
 
+	local ServerTime = GetServerTime()
+
 	if Cache.ConVars.Aimbot.Backtrack:GetBool() then
 		for _, v in ipairs(Cache.Players) do
 			if not ValidEntity(v) then
@@ -780,8 +783,6 @@ hook_Add("CreateMove", "pa_CreateMoveEx", function(cmd)
 
 			Cache.AimbotData.Backtrack[v] = pData
 		end
-
-		local ServerTime = GetServerTime()
 
 		for _, d in pairs(Cache.AimbotData.Backtrack) do
 			for i = #d, 1, -1 do
