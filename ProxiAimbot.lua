@@ -11,6 +11,9 @@
 		- Movement fix
 		- 0.2 second backtrack
 		- No lerp
+		- Buildmode checks
+		- Godmode checks
+		- HvHmode checks
 
 	Requires proxi (Duh)
 	Requires https://github.com/awesomeusername69420/miscellaneous-gmod-stuff/blob/main/Includes/modules/md5.lua (Anti Spread)
@@ -155,6 +158,23 @@ local Cache = {
 			Backtrack = CreateClientConVar("pa_backtrac", 1, true, false, "", 0, 1),
 
 			FOVOutline = CreateClientConVar("pa_fov_color_outline", "255 255 255 255", true, false, "")
+		}
+	},
+
+	NetVars = {
+		BuildMode = {
+			"BuildMode", -- Libby's
+			"buildmode", -- Fun Server
+			"_Kyle_Buildmode", -- Workshop addon
+			"BuildMode"
+		},
+
+		GodMode = {
+			"has_god" -- Fun Server + LBG
+		},
+
+		HvHMode = {
+			"HVHER" -- Fun Server + LBG
 		}
 	},
 
@@ -504,7 +524,10 @@ local function GetAimTarget()
 
 		if Cache.ConVars.Aimbot.Backtrack:GetBool() and Cache.AimbotData.Backtrack[v] then
 			for _, h in ipairs(Cache.AimbotData.Backtrack[v]) do
-				for _, Set in ipairs(Cache.AimbotData.ScanOrder) do
+				for i = #Cache.AimbotData.ScanOrder, 1, -1 do
+					local Set = Cache.AimbotData.ScanOrder[i]
+					if not h.hData[Set] then continue end
+
 					for _, hPos in ipairs(h.hData[Set]) do
 						Cur = DistanceFromCrosshair(hPos)
 
@@ -634,6 +657,42 @@ local function FixMovement(cmd)
 	cmd:SetSideMove(math_sin(Yaw) * Speed)
 end
 
+local function PlayerInBuildMode(Player)
+	for _, v in ipairs(Cache.NetVars.BuildMode) do
+		if Player:GetNWBool(v, false) then
+			return true
+		end
+	end
+
+	return false
+end
+
+local function PlayerInGodMode(Player)
+	if Player:HasGodMode() then return true end
+
+	for _, v in ipairs(Cache.NetVars.GodMode) do
+		if Player:GetNWBool(v, false) then
+			return true
+		end
+	end
+
+	return false
+end
+
+local function PlayerInOpposingHVHMode(Player)
+	local LocalHvH = false
+	local PlayerHvH = false
+
+	for _, v in ipairs(Cache.NetVars.HvHMode) do
+		if LocalHvH and PlayerHvH then break end
+
+		LocalHvH = Cache.LocalPlayer:GetNWBool(v, false)
+		PlayerHvH = Player:GetNWBool(v, false)
+	end
+
+	return LocalHvH ~= PlayerHvH
+end
+
 --------------------------- Timers ---------------------------
 
 timer_Create("pa_Update", 0.3, 0, function()
@@ -734,6 +793,7 @@ hook_Add("CreateMove", "pa_CreateMoveEx", function(cmd)
 	if input_IsButtonDown(Cache.ConVars.Aimbot.Key:GetInt()) and IsValid(Weapon) and WeaponCanShoot(Weapon) then
 		local Target, bPos, bTick = GetAimTarget()
 		if not IsValid(Target) then return end
+		if PlayerInBuildMode(Target) or PlayerInGodMode(Target) or PlayerInOpposingHVHMode(Target) then return end
 
 		Cache.AimbotData.Target = Target
 
