@@ -160,7 +160,7 @@ local Cache = {
 			AntiSpread = CreateClientConVar("pa_anti_spread", 1, true, false, "", 0, 1),
 			AntiRecoil = CreateClientConVar("pa_anti_recoil", 1, true, false, "", 0, 1),
 			AutoShoot = CreateClientConVar("pa_auto_shoot", 1, true, false, "", 0, 1),
-			Backtrack = CreateClientConVar("pa_backtrac", 1, true, false, "", 0, 1),
+			Backtrack = CreateClientConVar("pa_backtrack", 1, true, false, "", 0, 1),
 			AntiGesture = CreateClientConVar("pa_antigesture", 0, true, false, "", 0, 1),
 
 			FOVOutline = CreateClientConVar("pa_fov_color_outline", "255 255 255 255", true, false, "")
@@ -624,9 +624,11 @@ local function GetAvailablePositions(Entity)
 		if not phData[k] or not hData[k] then continue end
 
 		for _, x in ipairs(phData[k]) do
-			hData[k][#hData[k] + 1] = x
+			if PosInFOV(x) then
+				hData[k][#hData[k] + 1] = x
 
-			EMPTY = false
+				EMPTY = false
+			end
 		end
 	end
 
