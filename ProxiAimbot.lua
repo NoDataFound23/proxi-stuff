@@ -490,7 +490,7 @@ local function WeaponCanShoot(Weapon)
 	end
 
 	local Base = GetWeaponBase(Weapon)
-	local ExtraCheck = Cache.WeaponData.ShootChecks[Base] and stuff.ExtraChecks[Base](Weapon) or true
+	local ExtraCheck = Cache.WeaponData.ShootChecks[Base] and Cache.WeaponData.ShootChecks[Base](Weapon) or true
 
 	return GetServerTime() >= Weapon:GetNextPrimaryFire() and ExtraCheck
 end
