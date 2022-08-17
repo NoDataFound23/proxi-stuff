@@ -14,6 +14,7 @@
 		- Buildmode checks
 		- Godmode checks
 		- HvHmode checks
+		- Anti gesture
 
 	Requires proxi (Duh)
 	Requires https://github.com/awesomeusername69420/miscellaneous-gmod-stuff/blob/main/Includes/modules/md5.lua (Anti Spread)
@@ -32,6 +33,7 @@ pcall(include, "includes/modules/md5.lua")
 local FRAME_NET_UPDATE_START = 1
 local FRAME_NET_UPDATE_END = 4
 
+local GESTURE_SLOT_VCD = GESTURE_SLOT_VCD
 local HITGROUP_CHEST = HITGROUP_CHEST
 local HITGROUP_HEAD = HITGROUP_HEAD
 local HITGROUP_STOMACH = HITGROUP_STOMACH
@@ -156,6 +158,7 @@ local Cache = {
 			AntiRecoil = CreateClientConVar("pa_anti_recoil", 1, true, false, "", 0, 1),
 			AutoShoot = CreateClientConVar("pa_auto_shoot", 1, true, false, "", 0, 1),
 			Backtrack = CreateClientConVar("pa_backtrac", 1, true, false, "", 0, 1),
+			AntiGesture = CreateClientConVar("pa_antigesture", 0, true, false, "", 0, 1),
 
 			FOVOutline = CreateClientConVar("pa_fov_color_outline", "255 255 255 255", true, false, "")
 		}
@@ -896,6 +899,13 @@ hook_Add("PreDrawEffects", "pa_PreDrawEffects", function() -- Debug
 			end
 		end
 	end
+end)
+
+hook.Add("PrePlayerDraw", "pa_PrePlayerDraw", function(Player)
+	if not Cache.ConVars.Aimbot.AntiGesture:GetBool() then return end
+	if Player == Cache.LocalPlayer then return end
+	
+	Player:AnimResetGestureSlot(GESTURE_SLOT_VCD)
 end)
 
 hook_Add("OnScreenSizeChanged", "pa_OnScreenSizeChanged", function()
