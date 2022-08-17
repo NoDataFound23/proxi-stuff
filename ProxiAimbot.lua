@@ -548,11 +548,9 @@ local function GetAimTarget()
 
 		local Cur, WasW2S = DistanceFromCrosshair(v:WorldSpaceCenter())
 
-		if Cur <= (WasW2S and WMax or AMax) then
-			if Cur < Best then
-				Best = Cur
-				Entity = v
-			end
+		if Cur <= (WasW2S and WMax or AMax) and Cur < Best then
+			Best = Cur
+			Entity = v
 		end
 
 		if Cache.ConVars.Aimbot.Backtrack:GetBool() and Cache.AimbotData.Backtrack[v] then
