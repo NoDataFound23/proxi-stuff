@@ -921,7 +921,7 @@ hook_Add("CalcView", "", function(Player, EyePos, EyeAngles, FOV, ZNear, ZFar)
 	return View
 end)
 
-hook.Add("PrePlayerDraw", "pa_PrePlayerDraw", function(Player)
+hook_Add("PrePlayerDraw", "pa_PrePlayerDraw", function(Player)
 	if not Cache.ConVars.Aimbot.AntiGesture:GetBool() then return end
 	if Player == Cache.LocalPlayer then return end -- I wanna dance!
 
