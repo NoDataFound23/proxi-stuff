@@ -516,8 +516,9 @@ local function DistanceFromCrosshair(Pos)
 	if not Pos then return 360 end
 
 	local sPos = Pos:ToScreen()
+	local pRad = GetFOVRadius()
 
-	if sPos.visible then
+	if sPos.visible and pRad >= 0 then -- W2S is slightly more precise in some cases
 		return math_Distance(Cache.ScrW / 2, Cache.ScrH / 2, sPos.x, sPos.y), true
 	else
 		local Forward = Cache.FacingAngle:Forward()
@@ -532,7 +533,8 @@ local function PosInFOV(Pos)
 	local Dist, WasW2S = DistanceFromCrosshair(Pos)
 
 	if WasW2S then
-		return Dist <= GetFOVRadius()
+		local pRad = GetFOVRadius()
+		return Dist <= (pRad < 0 and Dist or pRad)
 	else
 		return Dist <= Cache.ConVars.Aimbot.FOV:GetInt()
 	end
