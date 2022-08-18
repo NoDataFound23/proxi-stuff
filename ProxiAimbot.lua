@@ -334,10 +334,9 @@ local function GetFOVRadius()
     local Max = Cache.ConVars.Aimbot.FOV:GetInt()
     
     local Ratio = Cache.ScrW / Cache.ScrH
-    local SubFOV = Cache.ConVars.fov_desired:GetInt() - Cache.LocalPlayer:GetFOV()
-    
+	
     local AimFOV = Max * math_pi_180
-    local GameFOV = (GetViewFOV() - SubFOV) * math_pi_180
+    local GameFOV = GetViewFOV() * math_pi_180
     local ViewFOV = 2 * math_atan(Ratio * (GetViewZNear() / 2) * math_tan(GameFOV / 2))
 
     return (math_tan(AimFOV) / math_tan(ViewFOV * 0.5)) * Cache.ScrW
