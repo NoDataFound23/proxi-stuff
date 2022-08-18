@@ -767,6 +767,8 @@ hook_Add("PreFrameStageNotify", "pa_PreFrameStageNotify", function(stage)
 end)
 
 hook_Add("CreateMove", "pa_CreateMoveEx", function(cmd)
+	local Process = Cache.ConVars.Aimbot.Enabled:GetBool()
+
 	Cache.LocalPlayer = Cache.LocalPlayer or LocalPlayer()
 
 	-- Setup facing angle
@@ -796,7 +798,7 @@ hook_Add("CreateMove", "pa_CreateMoveEx", function(cmd)
 	local ServerTime = GetServerTime()
 	local BacktrackLimit = Cache.ConVars.Aimbot.BacktrackAmount:GetFloat()
 
-	if Cache.ConVars.Aimbot.Backtrack:GetBool() then
+	if Cache.ConVars.Aimbot.Backtrack:GetBool() and Process then
 		for _, v in ipairs(Cache.Players) do
 			if not ValidEntity(v) or PlayerInBuildMode(v) or PlayerInGodMode(v) or PlayerInOpposingHVHMode(v) then -- No point in backtracking something you can't shoot at
 				Cache.AimbotData.Backtrack[v] = nil
@@ -812,17 +814,19 @@ hook_Add("CreateMove", "pa_CreateMoveEx", function(cmd)
 
 			Cache.AimbotData.Backtrack[v] = pData
 		end
+	end
 
-		for _, d in pairs(Cache.AimbotData.Backtrack) do
-			for i = #d, 1, -1 do
-				local dTime = TickToTime(d[i].Tick)
+	for _, d in pairs(Cache.AimbotData.Backtrack) do
+		for i = #d, 1, -1 do
+			local dTime = TickToTime(d[i].Tick)
 
-				if ServerTime - dTime > BacktrackLimit then
-					table_remove(d, i)
-				end
+			if ServerTime - dTime > BacktrackLimit then
+				table_remove(d, i)
 			end
 		end
 	end
+
+	if not Process then return end
 
 	-- Aimbot
 
