@@ -597,16 +597,23 @@ local function GetAimTarget()
 end
 
 local function GenerateMultiPoints(Pos, Ang, Mins, Maxs)
+	-- Inset points a little for accuracy
+
+	local pMins = Vector(Mins.x + 1, Mins.y + 1, Mins.z + 1)
+	local pMaxs = Vector(Maxs.x - 1, Maxs.y - 1, Maxs.z - 1)
+
 	local MP = {}
 
-	MP[1] = Mins * 1 -- Who needs auto generation when you have swag
-	MP[2] = Maxs * 1
-	MP[3] = Vector(Mins.x, Mins.y, Maxs.z)
-	MP[4] = Vector(Maxs.x, Mins.y, Maxs.z)
-	MP[5] = Vector(Maxs.x, Maxs.y, Mins.z)
-	MP[6] = Vector(Maxs.x, Mins.y, Mins.z)
-	MP[7] = Vector(Mins.x, Maxs.y, Mins.z)
-	MP[8] = Vector(Mins.x, Maxs.y, Maxs.z)
+	-- Who needs auto generation when you have swag
+
+	MP[1] = pMins * 1
+	MP[2] = pMaxs * 1
+	MP[3] = Vector(pMins.x, pMins.y, pMaxs.z)
+	MP[4] = Vector(pMaxs.x, pMins.y, pMaxs.z)
+	MP[5] = Vector(pMaxs.x, pMaxs.y, pMins.z)
+	MP[6] = Vector(pMaxs.x, pMins.y, pMins.z)
+	MP[7] = Vector(pMins.x, pMaxs.y, pMins.z)
+	MP[8] = Vector(pMins.x, pMaxs.y, pMaxs.z)
 
 	for i = 1, #MP do
 		MP[i]:Rotate(Ang)
