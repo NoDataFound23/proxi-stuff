@@ -49,7 +49,7 @@ pcall(include, "includes/modules/md5.lua")
 
 --------------------------- Localization ---------------------------
 
-local FRAME_NET_UPDATE_START = 1
+local FRAME_NET_UPDATE_START = 1 -- Had to scrape CS:GO cheats for these enums
 local FRAME_NET_UPDATE_END = 4
 
 local GESTURE_SLOT_VCD = GESTURE_SLOT_VCD
@@ -368,7 +368,7 @@ local function AngleOutOfRange(Angle)
 	return Angle.pitch > 89 or Angle.pitch < -89 or Angle.yaw > 180 or Angle.yaw < -180 or Angle.roll > 180 or Angle.roll < -180
 end
 
-local function FixAngle(Angle)
+local function FixAngle(Angle) -- Fixes an angle to only be what a player's eye angles can be normally
 	if not AngleOutOfRange(Angle) then return end
 
 	Angle.pitch = math_Clamp(math_NormalizeAngle(Angle.pitch), -89, 89)
@@ -444,7 +444,7 @@ local function PlayerInOpposingHVHMode(Player)
 end
 
 local function CalculateViewPunch(Weapon)
-	if not Weapon:IsScripted() then
+	if not Weapon:IsScripted() then -- HL2 guns
 		return Cache.LocalPlayer:GetViewPunchAngles()
 	else
 		return angle_zero
@@ -565,26 +565,27 @@ local function GetAimTarget()
 
 	for _, v in ipairs(Cache.Players) do
 		if not ValidEntity(v) then continue end
-		if PlayerInBuildMode(v) or PlayerInGodMode(v) or PlayerInOpposingHVHMode(v) then continue end
+		if PlayerInBuildMode(v) or PlayerInGodMode(v) or PlayerInOpposingHVHMode(v) then continue end -- Don't bother scanning these players
 
 		local Cur, WasW2S = DistanceFromCrosshair(v:WorldSpaceCenter())
 
-		if Cur <= (WasW2S and WMax or AMax) and Cur < Best then
+		if Cur <= (WasW2S and WMax or AMax) and Cur < Best then -- Adjust check for W2S
 			Best = Cur
 			Entity = v
 		end
 
-		if Cache.ConVars.Aimbot.Backtrack:GetBool() and Cache.AimbotData.Backtrack[v] then
+		if Cache.ConVars.Aimbot.Backtrack:GetBool() and Cache.AimbotData.Backtrack[v] then -- Best table organization you've ever seen
 			for _, h in ipairs(Cache.AimbotData.Backtrack[v]) do
 				for _, Set in ipairs(Cache.AimbotData.ScanOrder) do
 					if not h.hData[Set] then continue end
 
 					for _, hPos in ipairs(h.hData[Set]) do
 						Cur, WasW2S = DistanceFromCrosshair(hPos)
+
 						if Cur > (WasW2S and WMax or AMax) then continue  end
 						if not IsVisible(hPos) then continue end
 
-						if Cur < Best then
+						if Cur < Best then -- Breaks priority a little bit but it's better than randomly aiming at body
 							return v, hPos, h.Tick
 						end
 					end
@@ -629,7 +630,7 @@ local function GetEntityHitboxes(Entity)
 
 	local hData = {}
 
-	Entity:SetupBones()
+	Entity:SetupBones() -- Blah
 
 	for HitSet = 0, Entity:GetHitboxSetCount() - 1 do
 		for HitBox = 0, Entity:GetHitBoxCount(HitSet) - 1 do
@@ -714,7 +715,7 @@ local function FixMovement(cmd)
 	local CMDAngle = cmd:GetViewAngles()
 	local Yaw = CMDAngle.yaw - Cache.FacingAngle.yaw + MovementVector:Angle().yaw
 
-	if (CMDAngle.pitch + 90) % 360 > 180 then
+	if (CMDAngle.pitch + 90) % 360 > 180 then -- Wtf
 		Yaw = 180 - Yaw
 	end
 
@@ -753,11 +754,11 @@ end)
 hook_Add("PreFrameStageNotify", "pa_PreFrameStageNotify", function(stage)
 	if not IsValid(Cache.AimbotData.Target) then return end
 
-	if stage == FRAME_NET_UPDATE_START then
+	if stage == FRAME_NET_UPDATE_START then -- Disable lerp for target during aiming
 		pSetInterpolationEnabled(Cache.AimbotData.Target, false)
 	end
 
-	if stage == FRAME_NET_UPDATE_END then
+	if stage == FRAME_NET_UPDATE_END then -- Reenable lerp afterwards
 		pSetInterpolationEnabled(Cache.AimbotData.Target, true)
 		Cache.AimbotData.Target = NULL
 	end
@@ -795,11 +796,10 @@ hook_Add("CreateMove", "pa_CreateMoveEx", function(cmd)
 
 	if Cache.ConVars.Aimbot.Backtrack:GetBool() then
 		for _, v in ipairs(Cache.Players) do
-			if not ValidEntity(v) or PlayerInBuildMode(v) or PlayerInGodMode(v) or PlayerInOpposingHVHMode(v) then
+			if not ValidEntity(v) or PlayerInBuildMode(v) or PlayerInGodMode(v) or PlayerInOpposingHVHMode(v) then -- No point in backtracking something you can't shoot at
 				Cache.AimbotData.Backtrack[v] = nil
 				continue
 			end
-
 
 			local pData = Cache.AimbotData.Backtrack[v] or {}
 
@@ -838,7 +838,7 @@ hook_Add("CreateMove", "pa_CreateMoveEx", function(cmd)
 		local TargetSimTime = bTick and TickToTime(bTick) or GetEntitySimTime(Target)
 		local TargetSimTick = bTick or TimeToTick(TargetSimTime)
 
-		if ServerTime - TargetSimTime <= BacktrackLimit then
+		if ServerTime - TargetSimTime <= BacktrackLimit then -- Don't set tick count for people who are lagging
 			cmd:SetTickCount(TargetSimTick)
 		end
 
@@ -917,14 +917,14 @@ end)
 
 hook.Add("PrePlayerDraw", "pa_PrePlayerDraw", function(Player)
 	if not Cache.ConVars.Aimbot.AntiGesture:GetBool() then return end
-	if Player == Cache.LocalPlayer then return end
+	if Player == Cache.LocalPlayer then return end -- I wanna dance!
 
 	Player:AnimResetGestureSlot(GESTURE_SLOT_VCD)
 end)
 
 hook_Add("PreDrawEffects", "pa_PreDrawEffects", function() -- Debug
 	if Cache.ConVars.Aimbot.DEBUGMODE:GetBool() and Cache.ConVars.Aimbot.Backtrack:GetBool() then
-		local Mins = Vector(-1, -1, -1)
+		local Mins = Vector(-1, -1, -1) -- No cache because it's just debug who cares
 		local Maxs = Vector(1, 1, 1)
 
 		for _, d in pairs(Cache.AimbotData.Backtrack) do
@@ -959,6 +959,6 @@ cvars_AddChangeCallback("pa_animlerp", function(_, _, NewValue)
 	pDisableAnimInterp(not tobool(NewValue))
 end)
 
-Cache.ConVars.cl_interpolate:ForceBool(false)
+Cache.ConVars.cl_interpolate:ForceBool(false) -- This should maybe be somewhere else but ehhhh
 Cache.ConVars.cl_interp:ForceFloat(0)
 Cache.ConVars.cl_interp:SendValue(0)
