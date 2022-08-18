@@ -15,6 +15,25 @@
 		- Godmode checks
 		- HvHmode checks
 		- Anti gesture
+		- Basic corner multipoint for either head only or all hitboxes
+
+	ConVars:
+		pa_debug					-	Controls debug mode					(Default: 0)
+		pa_animlerp					-	Conrtols animation lerp				(Default: 1)
+		pa_enabled					-	Controls aimbot state				(Default: 1)
+		pa_key						-	Sets aimbot key						(Default: MOUSE_5 (111))
+		pa_fov						-	Sets aimbot FOV						(Default: 16)
+		pa_silent					-	Controls silent aim					(Default: 1)
+		pa_bullettime				-	Controls waiting for weapon fire	(Default: 1)
+		pa_fix_movement				-	Controls movement fix				(Default: 1)
+		pa_anti_spread				-	Controls anti spread				(Default: 1)
+		pa_anti_recoil				-	Controls anti recoil				(Default: 1)
+		pa_auto_shoot				-	Controls auto shoot					(Default: 1)
+		pa_backtrack				-	Controls backtrack					(Default: 1)
+		pa_backtrack_limit			-	Controls backtrack amount (seconds)	(Default: 0.2)
+		pa_antigesture				-	Controls anti gesture				(Default: 0)
+		pa_multipoint				-	Controls mutlipoint					(Default: 1)
+		pa_multipoint_everything	-	Controls multipointing every hitbox	(Default: 0)
 
 	Requires proxi (Duh)
 	Requires https://github.com/awesomeusername69420/miscellaneous-gmod-stuff/blob/main/Includes/modules/md5.lua (Anti Spread)
@@ -163,6 +182,8 @@ local Cache = {
 			Backtrack = CreateClientConVar("pa_backtrack", 1, true, false, "", 0, 1),
 			BacktrackAmount = CreateClientConVar("pa_backtrack_limit", 0.2, true, false, "", 0, 1), -- In SECONDS
 			AntiGesture = CreateClientConVar("pa_antigesture", 0, true, false, "", 0, 1),
+			MultiPoint = CreateClientConVar("pa_multipoint", 1, true, false, "", 0, 1),
+			MultiPointAll = CreateClientConVar("pa_multipoint_everything", 0, true, false, "", 0, 1),
 
 			FOVOutline = CreateClientConVar("pa_fov_color_outline", "255 255 255 255", true, false, "")
 		}
@@ -575,7 +596,30 @@ local function GetAimTarget()
 	return Entity, bPos, bTick
 end
 
+local function GenerateMultiPoints(Pos, Ang, Mins, Maxs)
+	local MP = {}
+
+	MP[1] = Mins * 1 -- Who needs auto generation when you have swag
+	MP[2] = Maxs * 1
+	MP[3] = Vector(Mins.x, Mins.y, Maxs.z)
+	MP[4] = Vector(Maxs.x, Mins.y, Maxs.z)
+	MP[5] = Vector(Maxs.x, Maxs.y, Mins.z)
+	MP[6] = Vector(Maxs.x, Mins.y, Mins.z)
+	MP[7] = Vector(Mins.x, Maxs.y, Mins.z)
+	MP[8] = Vector(Mins.x, Maxs.y, Maxs.z)
+
+	for i = 1, #MP do
+		MP[i]:Rotate(Ang)
+		MP[i] = MP[i] + Pos
+	end
+
+	return MP
+end
+
 local function GetEntityHitboxes(Entity)
+	local DoMP = Cache.ConVars.Aimbot.MultiPoint:GetBool()
+	local DoMPAll = Cache.ConVars.Aimbot.MultiPointAll:GetBool()
+
 	local hData = {}
 
 	Entity:SetupBones()
@@ -596,6 +640,14 @@ local function GetEntityHitboxes(Entity)
 
 			local Pos, Ang = bMatrix:GetTranslation(), bMatrix:GetAngles()
 			if not Pos or not Ang then continue end
+
+			if DoMP and (DoMPAll and true or HitGroup == HITGROUP_HEAD) then
+				local MPs = GenerateMultiPoints(Pos, Ang, Mins, Maxs)
+
+				for i = 1, #MPs do
+					hData[HitGroup][#hData[HitGroup] + 1] = MPs[i]
+				end
+			end
 
 			Mins:Rotate(Ang)
 			Maxs:Rotate(Ang)
