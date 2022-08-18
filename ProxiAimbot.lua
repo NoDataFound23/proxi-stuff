@@ -9,7 +9,7 @@
 		- Silent Aim
 		- Bullettime
 		- Movement fix
-		- Bbacktrack (0.2 seconds by default, changing this might introduce jank)
+		- Backtrack (0.2 seconds by default, changing this might introduce jank)
 		- No lerp
 		- Buildmode checks
 		- Godmode checks
