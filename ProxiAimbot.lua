@@ -9,7 +9,7 @@
 		- Silent Aim
 		- Bullettime
 		- Movement fix
-		- 0.2 second backtrack
+		- Bbacktrack (0.2 seconds by default, changing this might introduce jank)
 		- No lerp
 		- Buildmode checks
 		- Godmode checks
@@ -161,6 +161,7 @@ local Cache = {
 			AntiRecoil = CreateClientConVar("pa_anti_recoil", 1, true, false, "", 0, 1),
 			AutoShoot = CreateClientConVar("pa_auto_shoot", 1, true, false, "", 0, 1),
 			Backtrack = CreateClientConVar("pa_backtrack", 1, true, false, "", 0, 1),
+			BacktrackAmount = CreateClientConVar("pa_backtrack_limit", 0.2, true, false, "", 0, 1), -- In SECONDS
 			AntiGesture = CreateClientConVar("pa_antigesture", 0, true, false, "", 0, 1),
 
 			FOVOutline = CreateClientConVar("pa_fov_color_outline", "255 255 255 255", true, false, "")
@@ -334,7 +335,7 @@ local function GetFOVRadius()
     local Max = Cache.ConVars.Aimbot.FOV:GetInt()
     
     local Ratio = Cache.ScrW / Cache.ScrH
-	
+
     local AimFOV = Max * math_pi_180
     local GameFOV = GetViewFOV() * math_pi_180
     local ViewFOV = 2 * math_atan(Ratio * (GetViewZNear() / 2) * math_tan(GameFOV / 2))
@@ -731,6 +732,7 @@ hook_Add("CreateMove", "pa_CreateMoveEx", function(cmd)
 	-- Setup backtrack points
 
 	local ServerTime = GetServerTime()
+	local BacktrackLimit = Cache.ConVars.Aimbot.BacktrackAmount:GetFloat()
 
 	if Cache.ConVars.Aimbot.Backtrack:GetBool() then
 		for _, v in ipairs(Cache.Players) do
@@ -754,7 +756,7 @@ hook_Add("CreateMove", "pa_CreateMoveEx", function(cmd)
 			for i = #d, 1, -1 do
 				local dTime = TickToTime(d[i].Tick)
 
-				if ServerTime - dTime >= 0.2 then
+				if ServerTime - dTime > BacktrackLimit then
 					table_remove(d, i)
 				end
 			end
@@ -777,7 +779,7 @@ hook_Add("CreateMove", "pa_CreateMoveEx", function(cmd)
 		local TargetSimTime = bTick and TickToTime(bTick) or GetEntitySimTime(Target)
 		local TargetSimTick = bTick or TimeToTick(TargetSimTime)
 
-		if ServerTime - TargetSimTime <= 0.2 then
+		if ServerTime - TargetSimTime <= BacktrackLimit then
 			cmd:SetTickCount(TargetSimTick)
 		end
 
