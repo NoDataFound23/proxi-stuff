@@ -332,6 +332,8 @@ local Cache = {
 	},
 
 	AimbotData = {
+		Angle = LocalPlayer():EyeAngles(),
+		Active = false,
 		Target = NULL,
 		FOVPoly = nil,
 
@@ -462,6 +464,11 @@ end
 
 local function CalculateNoSpread(Weapon, cmd, pAngle)
 	if not Cache.ConVars.Aimbot.AntiSpread:GetBool() then return pAngle end
+
+	if Weapon:IsScripted() then
+		cmd:SetRandomSeed(33)
+		return pAngle
+	end
 
 	local WeaponCone = Cache.WeaponData.SpreadCones[Weapon:GetClass()]
 
@@ -776,8 +783,6 @@ hook_Add("PreFrameStageNotify", "pa_PreFrameStageNotify", function(stage)
 end)
 
 hook_Add("CreateMove", "pa_CreateMoveEx", function(cmd)
-	local Process = Cache.ConVars.Aimbot.Enabled:GetBool()
-
 	Cache.LocalPlayer = Cache.LocalPlayer or LocalPlayer()
 
 	-- Setup facing angle
@@ -807,7 +812,7 @@ hook_Add("CreateMove", "pa_CreateMoveEx", function(cmd)
 	local ServerTime = GetServerTime()
 	local BacktrackLimit = Cache.ConVars.Aimbot.BacktrackAmount:GetFloat()
 
-	if Cache.ConVars.Aimbot.Backtrack:GetBool() and Process then
+	if Cache.ConVars.Aimbot.Backtrack:GetBool() and Cache.ConVars.Aimbot.Enabled:GetBool() then
 		for _, v in ipairs(Cache.Players) do
 			if not ValidEntity(v) or PlayerInBuildMode(v) or PlayerInGodMode(v) or PlayerInOpposingHVHMode(v) then -- No point in backtracking something you can't shoot at
 				Cache.AimbotData.Backtrack[v] = nil
@@ -835,13 +840,19 @@ hook_Add("CreateMove", "pa_CreateMoveEx", function(cmd)
 		end
 	end
 
-	if not Process then return end
+	hook.Run("CreateMoveEx", cmd) -- Fix this retarded hook not running as often as it should
 
-	-- Aimbot
+	if Cache.AimbotData.Active then
+		cmd:SetViewAngles(Cache.AimbotData.Angle)
+	end
+end)
+
+hook.Add("CreateMoveEx", "pa_CreateMoveEx", function(cmd)
+	Cache.AimbotData.Active = false
 
 	local Weapon = Cache.LocalPlayer:GetActiveWeapon()
 
-	if input_IsButtonDown(Cache.ConVars.Aimbot.Key:GetInt()) and IsValid(Weapon) and WeaponCanShoot(Weapon) then
+	if Cache.ConVars.Aimbot.Enabled:GetBool() and input_IsButtonDown(Cache.ConVars.Aimbot.Key:GetInt()) and IsValid(Weapon) and WeaponCanShoot(Weapon) then
 		local Target, bPos, bTick = GetAimTarget()
 		if not IsValid(Target) then return end
 
@@ -853,7 +864,7 @@ hook_Add("CreateMove", "pa_CreateMoveEx", function(cmd)
 		local TargetSimTime = bTick and TickToTime(bTick) or GetEntitySimTime(Target)
 		local TargetSimTick = bTick or TimeToTick(TargetSimTime)
 
-		if ServerTime - TargetSimTime <= BacktrackLimit then -- Don't set tick count for people who are lagging
+		if GetServerTime() - TargetSimTime <= Cache.ConVars.Aimbot.BacktrackAmount:GetFloat() then -- Don't set tick count for people who are lagging
 			cmd:SetTickCount(TargetSimTick)
 		end
 
@@ -861,25 +872,27 @@ hook_Add("CreateMove", "pa_CreateMoveEx", function(cmd)
 			local pAngle = (Pos - Cache.LocalPlayer:EyePos()):Angle()
 			local sAngle = CalculateNoSpread(Weapon, cmd, pAngle)
 
-			cmd:SetViewAngles(sAngle - CalculateViewPunch(Weapon))
+			Cache.AimbotData.Angle = sAngle - CalculateViewPunch(Weapon)
+			Cache.AimbotData.Active = true
 
 			if Cache.ConVars.Aimbot.AutoShoot:GetBool() then
 				cmd:AddKey(IN_ATTACK)
 			end
-
-			if Cache.ConVars.Aimbot.FixMovement:GetBool() then
-				FixMovement(cmd)
-			end
 		pEndPrediction()
-	else
-		if cmd:KeyDown(IN_ATTACK) and IsValid(Weapon) and WeaponCanShoot(Weapon) then
-			local sAngle = CalculateNoSpread(Weapon, cmd, Cache.FacingAngle)
 
-			cmd:SetViewAngles(sAngle - CalculateViewPunch(Weapon))
+		if Cache.ConVars.Aimbot.FixMovement:GetBool() then
+			FixMovement(cmd)
+		end
+	end
 
-			if Cache.ConVars.Aimbot.FixMovement:GetBool() then
-				FixMovement(cmd)
-			end
+	if not Cache.AimbotData.Active and cmd:KeyDown(IN_ATTACK) and IsValid(Weapon) and WeaponCanShoot(Weapon) then
+		local sAngle = CalculateNoSpread(Weapon, cmd, Cache.FacingAngle)
+
+		Cache.AimbotData.Angle = sAngle - CalculateViewPunch(Weapon)
+		Cache.AimbotData.Active = true
+
+		if Cache.ConVars.Aimbot.FixMovement:GetBool() then
+			FixMovement(cmd)
 		end
 	end
 end)
