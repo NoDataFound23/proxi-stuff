@@ -45,7 +45,7 @@
 
 local IsIdiot = false
 xpcall(function() require("proxi") end, function() IsIdiot = true end)
-if IsIdiot then MsgC(Color(255, 0, 0), ("YOU DON'T HAVE PROXI YOU DUMBASS IDIOT\n"):rep(420)) return else IsIdiot = nil end
+if IsIdiot or proxi == nil then MsgC(Color(255, 0, 0), ("YOU DON'T HAVE PROXI YOU DUMBASS IDIOT\n"):rep(420)) return else IsIdiot = nil end
 
 jit.flush() -- Wat da
 
