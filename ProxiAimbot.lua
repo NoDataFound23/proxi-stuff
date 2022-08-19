@@ -35,8 +35,12 @@
 		pa_multipoint				-	Controls mutlipoint					(Default: 1)
 		pa_multipoint_everything	-	Controls multipointing every hitbox	(Default: 0)
 
+	ConCommands:
+		pa_menu						-	Opens the menu
+
 	Requires proxi (Duh)
 	Requires https://github.com/awesomeusername69420/miscellaneous-gmod-stuff/blob/main/Includes/modules/md5.lua (Anti Spread)
+	Requires https://github.com/awesomeusername69420/miscellaneous-gmod-stuff/blob/main/vgui/dsection.lua (For the menu)
 ]]
 
 local IsIdiot = false
@@ -46,11 +50,14 @@ if IsIdiot then MsgC(Color(255, 0, 0), ("YOU DON'T HAVE PROXI YOU DUMBASS IDIOT\
 jit.flush() -- Wat da
 
 pcall(include, "includes/modules/md5.lua")
+pcall(include, "vgui/dsection.lua")
 
 --------------------------- Localization ---------------------------
 
-local FRAME_NET_UPDATE_START = 1 -- Had to scrape CS:GO cheats for these enums
-local FRAME_NET_UPDATE_END = 4
+local meta_cl = proxi._R.Color
+
+local FRAME_NET_UPDATE_START = proxi.FRAME_NET_UPDATE_START
+local FRAME_NET_UPDATE_END = proxi.FRAME_NET_UPDATE_END
 
 local GESTURE_SLOT_VCD = GESTURE_SLOT_VCD
 local HITGROUP_CHEST = HITGROUP_CHEST
@@ -74,6 +81,7 @@ local ScrH = ScrH
 local ScrW = ScrW
 local Vector = Vector
 local ipairs = ipairs
+local setmetatable = setmetatable
 local tobool = tobool
 
 local player_GetAll = player.GetAll
@@ -119,6 +127,8 @@ local table_remove = table.remove
 
 local util_TraceLine = util.TraceLine
 
+local vgui_Create = vgui.Create
+
 local NULL = NULL
 local angle_zero = Angle(0, 0, 0)
 
@@ -139,8 +149,11 @@ local Cache = {
 	LocalPlayer = LocalPlayer(),
 	FacingAngle = LocalPlayer():EyeAngles(),
 
+	Menu = nil,
+
 	Colors = {
 		White = Color(255, 255, 255, 255),
+		Black = Color(0, 0, 0, 255),
 
 		FOV = {
 			Outline = Color(255, 255, 255, 255),
@@ -170,7 +183,7 @@ local Cache = {
 			AnimLerp = CreateClientConVar("pa_animlerp", 1, true, false, "", 0, 1),
 
 			Enabled = CreateClientConVar("pa_enabled", 1, true, false, "", 0, 1),
-			Key = CreateClientConVar("pa_key", MOUSE_5, true, false, "", 0, KEY_COUNT),
+			Key = CreateClientConVar("pa_key", MOUSE_5, true, false, "", 0, math.huge), -- Shitass KEY_COUNT isn't even close to the real number
 
 			FOV = CreateClientConVar("pa_fov", 16, true, false, "", 0, 180),
 			Silent = CreateClientConVar("pa_silent", 1, true, false, "", 0, 1),
@@ -444,11 +457,7 @@ local function PlayerInOpposingHVHMode(Player)
 end
 
 local function CalculateViewPunch(Weapon)
-	if not Weapon:IsScripted() then -- HL2 guns
-		return Cache.LocalPlayer:GetViewPunchAngles()
-	else
-		return angle_zero
-	end
+	return Weapon:IsScripted() and angle_zero or Cache.LocalPlayer:GetViewPunchAngles()
 end
 
 local function CalculateNoSpread(Weapon, cmd, pAngle)
@@ -968,3 +977,136 @@ end)
 Cache.ConVars.cl_interpolate:ForceBool(false) -- This should maybe be somewhere else but ehhhh
 Cache.ConVars.cl_interp:ForceFloat(0)
 Cache.ConVars.cl_interp:SendValue(0)
+
+--------------------------- Menu Setup ---------------------------
+
+do -- Garbage collection friendly
+	local function CreateCheckBox(Parent, X, Y, Label, ConVar)
+		local CheckBox = vgui_Create("DCheckBoxLabel", Parent)
+		CheckBox:SetTextColor(Cache.Colors.Black)
+		CheckBox:SetText(Label)
+		CheckBox:SetPos(X, Y)
+		CheckBox:SetChecked(ConVar:GetBool())
+
+		CheckBox._ConVar = ConVar
+
+		CheckBox.OnChange = function(self, NewValue)
+			self._ConVar:SetBool(NewValue)
+		end
+
+		CheckBox.Think = function(self)
+			self:SetChecked(self._ConVar:GetBool())
+		end
+	end
+
+	local function CreateSlider(Parent, X, Y, Width, Min, Max, Decimals, Label, ConVar)
+		local NSlider = vgui_Create("DNumSlider", Parent) -- "Slider" is a global and the color highlighting was annoying
+		NSlider:SetWide(Width)
+		NSlider:SetPos(X, Y)
+		NSlider:SetMinMax(Min, Max)
+		NSlider:SetDark(true)
+		NSlider:SetDecimals(Decimals)
+		NSlider:SetConVar(ConVar:GetName())
+		NSlider:SetValue(ConVar:GetFloat()) -- Shouldn't be required but the knob fucks up without this
+
+		-- Custom label to close the giant gap DNumSliders have between their label and the actual slider
+
+		NSlider.Label:SetVisible(false)
+		local NLabel = vgui_Create("DLabel", NSlider)
+
+		surface.SetFont(NLabel:GetFont())
+		local tw, _ = surface.GetTextSize(Label)
+
+		NLabel:Dock(LEFT)
+		NLabel:SetWide(tw)
+		NLabel:SetText(Label)
+		NLabel:SetTextColor(Cache.Colors.Black)
+	end
+
+	local Main = vgui_Create("DFrame")
+	Main:SetSize(400, 590)
+	Main:Center()
+	Main:SetTitle("Proxi Aimbot")
+	Main:SetSizable(false)
+	Main:SetVisible(false)
+	Main:SetDeleteOnClose(false)
+
+	local MainFrame = vgui_Create("DPanel", Main) -- Yeah it's a panel but "MainPanel" doesn't sound as cool; This is really just here for the background color
+	MainFrame:Dock(FILL)
+	Main:InvalidateLayout(true) -- Derma fucking sucks
+
+	--------------------------- Top Part ---------------------------
+
+	local TopSection = vgui_Create("DSection", MainFrame)
+	TopSection:SetSize(MainFrame:GetWide() - 10, 328)
+	TopSection:SetPos(5, 5)
+	TopSection:SetText("Options")
+	TopSection:SetTextColor(Cache.Colors.Black)
+
+	CreateCheckBox(TopSection, 25, 25, "Enable Aimbot", Cache.ConVars.Aimbot.Enabled)
+	CreateCheckBox(TopSection, 50, 50, "Silent Aim", Cache.ConVars.Aimbot.Silent)
+	CreateCheckBox(TopSection, 50, 75, "Bullettime", Cache.ConVars.Aimbot.Bullettime)
+	CreateCheckBox(TopSection, 50, 100, "Movement Fix", Cache.ConVars.Aimbot.FixMovement)
+	CreateCheckBox(TopSection, 50, 125, "Anti Spread", Cache.ConVars.Aimbot.AntiSpread)
+	CreateCheckBox(TopSection, 50, 150, "Anti Recoil", Cache.ConVars.Aimbot.AntiRecoil)
+	CreateCheckBox(TopSection, 50, 175, "Auto Shoot", Cache.ConVars.Aimbot.AutoShoot)
+	CreateCheckBox(TopSection, 50, 200, "Backtrack", Cache.ConVars.Aimbot.Backtrack)
+	CreateCheckBox(TopSection, 50, 225, "Anti Gesture", Cache.ConVars.Aimbot.AntiGesture)
+	CreateCheckBox(TopSection, 50, 250, "Multipoint", Cache.ConVars.Aimbot.MultiPoint)
+	CreateCheckBox(TopSection, 75, 275, "Multipoint Every Hitbox", Cache.ConVars.Aimbot.MultiPointAll)
+	CreateCheckBox(TopSection, 50, 300, "Disable Animation Lerp", Cache.ConVars.Aimbot.AnimLerp)
+
+	local KeyBinder = vgui_Create("DBinder", TopSection)
+	KeyBinder:SetSize(100, 25)
+	KeyBinder:SetPos(250, 25)
+	KeyBinder:SetConVar(Cache.ConVars.Aimbot.Key:GetName())
+
+	--------------------------- Bottom Part ---------------------------
+
+	local BottomSection = vgui_Create("DSection", MainFrame)
+	BottomSection:SetSize(MainFrame:GetWide() - 10, MainFrame:GetTall() - TopSection:GetTall() - 10)
+	BottomSection:SetPos(5, 5 + TopSection:GetTall())
+	BottomSection:SetText("The second part")
+	BottomSection:SetTextColor(Cache.Colors.Black)
+
+	CreateSlider(BottomSection, 25, 25, BottomSection:GetWide() - 50, 0, 180, 0, "FOV", Cache.ConVars.Aimbot.FOV)
+	CreateSlider(BottomSection, 25, 50, BottomSection:GetWide() - 50, 0, 1, 1, "Backtrack Amount", Cache.ConVars.Aimbot.BacktrackAmount)
+
+	local FOVLabel = vgui_Create("DLabel", BottomSection)
+	FOVLabel:SetPos(25, 80)
+	FOVLabel:SetWide(125)
+	FOVLabel:SetText("FOV Circle Color")
+	FOVLabel:SetTextColor(Cache.Colors.Black)
+
+	local FOVColor = vgui_Create("DColorMixer", BottomSection)
+	FOVColor:SetPalette(false)
+	FOVColor:SetSize(215, 100)
+	FOVColor:SetPos(25, 100)
+
+	FOVColor.ValueChanged = function(_, NewColor)
+		NewColor = setmetatable(NewColor, meta_cl) -- Fix bug
+
+		Cache.ConVars.Aimbot.FOVOutline:SetString(tostring(NewColor))
+	end
+	
+	FOVColor._oThink = FOVColor.Think
+
+	FOVColor.Think = function(self)
+		self._oThink(self)
+
+		self:SetColor(Cache.Colors.FOV.Outline)
+	end
+
+	Cache.Menu = Main
+end
+
+concommand.Add("pa_menu", function()
+	if IsValid(Cache.Menu) then
+		Cache.Menu:SetVisible(true)
+		Cache.Menu:MakePopup()
+	end
+end)
+
+--------------------------- Take out the trash ---------------------------
+
+collectgarbage("collect")
