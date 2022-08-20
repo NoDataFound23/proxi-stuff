@@ -81,6 +81,7 @@ local ScrH = ScrH
 local ScrW = ScrW
 local Vector = Vector
 local ipairs = ipairs
+local print = print
 local setmetatable = setmetatable
 local tobool = tobool
 
@@ -346,6 +347,17 @@ local Cache = {
 		Backtrack = {}
 	},
 
+	HitgroupTranslation = {
+		[HITGROUP_GENERIC] = "HITGROUP_GENERIC",
+		[HITGROUP_HEAD] = "HITGROUP_HEAD",
+		[HITGROUP_CHEST] = "HITGROUP_CHEST",
+		[HITGROUP_STOMACH] = "HITGROUP_STOMACH",
+		[HITGROUP_LEFTARM] = "HITGROUP_LEFTARM",
+		[HITGROUP_RIGHTARM] = "HITGROUP_RIGHTARM",
+		[HITGROUP_LEFTLEG] = "HITGROUP_LEFTLEG",
+		[HITGROUP_RIGHTLEG] = "HITGROUP_RIGHTLEG"
+	},
+
 	Players = {}
 }
 
@@ -578,9 +590,6 @@ local function GetAimTarget()
 	local Best = math_huge
 	local Entity = NULL
 
-	local bPos = nil
-	local bTick = nil
-
 	for _, v in ipairs(Cache.Players) do
 		if not ValidEntity(v) then continue end
 		if PlayerInBuildMode(v) or PlayerInGodMode(v) or PlayerInOpposingHVHMode(v) then continue end -- Don't bother scanning these players
@@ -604,7 +613,7 @@ local function GetAimTarget()
 						if not IsVisible(hPos) then continue end
 
 						if Cur < Best then -- Breaks priority a little bit but it's better than randomly aiming at body
-							return v, hPos, h.Tick
+							return v, hPos, h.Tick, Set
 						end
 					end
 				end
@@ -612,7 +621,7 @@ local function GetAimTarget()
 		end
 	end
 
-	return Entity, bPos, bTick
+	return Entity
 end
 
 local function GenerateMultiPoints(Pos, Ang, Mins, Maxs)
@@ -719,7 +728,7 @@ local function GetAimPosition(Entity)
 
 		for _, v in ipairs(Data[Set]) do
 			if IsVisible(v, Entity) then
-				return v
+				return v, Set
 			end
 		end
 	end
@@ -853,12 +862,21 @@ hook.Add("CreateMoveEx", "pa_CreateMoveEx", function(cmd)
 	local Weapon = Cache.LocalPlayer:GetActiveWeapon()
 
 	if Cache.ConVars.Aimbot.Enabled:GetBool() and input_IsButtonDown(Cache.ConVars.Aimbot.Key:GetInt()) and IsValid(Weapon) and WeaponCanShoot(Weapon) then
-		local Target, bPos, bTick = GetAimTarget()
+		local Target, bPos, bTick, bHitGroup = GetAimTarget()
 		if not IsValid(Target) then return end
 
 		Cache.AimbotData.Target = Target
 
-		local Pos = bPos or GetAimPosition(Target)
+		local Pos
+		local HitGroup
+
+		if bPos then
+			Pos = bPos
+			HitGroup = bHitGroup
+		else
+			Pos, HitGroup = GetAimPosition(Target)
+		end
+
 		if not Pos then return end
 
 		local TargetSimTime = bTick and TickToTime(bTick) or GetEntitySimTime(Target)
@@ -866,6 +884,18 @@ hook.Add("CreateMoveEx", "pa_CreateMoveEx", function(cmd)
 
 		if GetServerTime() - TargetSimTime <= Cache.ConVars.Aimbot.BacktrackAmount:GetFloat() then -- Don't set tick count for people who are lagging
 			cmd:SetTickCount(TargetSimTick)
+		end
+
+		if Cache.ConVars.Aimbot.DEBUGMODE:GetBool() then
+			print("~~~~~~~~~~~~~ Processed Data For " .. tostring(Target) .. " ~~~~~~~~~~~~~")
+			print("Position: " .. tostring(Pos))
+			print("HitGroup: " .. tostring(Cache.HitgroupTranslation[HitGroup]))
+			print("Backtrack? : " .. tostring(tobool(bPos)))
+			print("Target Sim Tick: " .. TargetSimTick)
+			print("Target Sim Time: " .. TargetSimTime)
+			print("Server Time: " .. GetServerTime())
+			print("Target Sim Dif: " .. (GetServerTime() - TargetSimTime))
+			print("~~~~~~~~~~~~~ ~~~~~~~~~~~~~ ~~~~~~~~~~~~~ ~~~~~~~~~~~~~")
 		end
 
 		pStartPrediction(cmd)
