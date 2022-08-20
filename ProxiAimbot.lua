@@ -577,9 +577,7 @@ local function IsVisible(Pos, Entity)
 	})
 
 	if IsValid(Entity) then
-		return tr.Entity == Entity
-	else
-		return tr.Fraction >= 0.98
+		return tr.Entity == Entity, tr.Fraction
 	end
 end
 
@@ -609,11 +607,13 @@ local function GetAimTarget()
 					for _, hPos in ipairs(h.hData[Set]) do
 						Cur, WasW2S = DistanceFromCrosshair(hPos)
 
-						if Cur > (WasW2S and WMax or AMax) then continue  end
-						if not IsVisible(hPos) then continue end
+						if Cur > (WasW2S and WMax or AMax) then continue end
+
+						local Visible, Fr = IsVisible(hPos, v)
+						if not Visible then continue end
 
 						if Cur < Best then -- Breaks priority a little bit but it's better than randomly aiming at body
-							return v, hPos, h.Tick, Set
+							return v, hPos, h.Tick, Set, Fr
 						end
 					end
 				end
@@ -727,8 +727,10 @@ local function GetAimPosition(Entity)
 		if not Data[Set] then continue end
 
 		for _, v in ipairs(Data[Set]) do
-			if IsVisible(v, Entity) then
-				return v, Set
+			local Visible, Fr = IsVisible(v, Entity)
+
+			if Visible then
+				return v, Set, Fr
 			end
 		end
 	end
@@ -862,19 +864,21 @@ hook.Add("CreateMoveEx", "pa_CreateMoveEx", function(cmd)
 	local Weapon = Cache.LocalPlayer:GetActiveWeapon()
 
 	if Cache.ConVars.Aimbot.Enabled:GetBool() and input_IsButtonDown(Cache.ConVars.Aimbot.Key:GetInt()) and IsValid(Weapon) and WeaponCanShoot(Weapon) then
-		local Target, bPos, bTick, bHitGroup = GetAimTarget()
+		local Target, bPos, bTick, bHitGroup, bFraction = GetAimTarget()
 		if not IsValid(Target) then return end
 
 		Cache.AimbotData.Target = Target
 
 		local Pos
 		local HitGroup
+		local Fraction
 
 		if bPos then
 			Pos = bPos
 			HitGroup = bHitGroup
+			Fraction = bFraction
 		else
-			Pos, HitGroup = GetAimPosition(Target)
+			Pos, HitGroup, Fraction = GetAimPosition(Target)
 		end
 
 		if not Pos then return end
@@ -895,6 +899,7 @@ hook.Add("CreateMoveEx", "pa_CreateMoveEx", function(cmd)
 			print("Target Sim Time: " .. TargetSimTime)
 			print("Server Time: " .. GetServerTime())
 			print("Target Sim Dif: " .. (GetServerTime() - TargetSimTime))
+			print("Fraction: " .. tostring(Fraction))
 			print("~~~~~~~~~~~~~ ~~~~~~~~~~~~~ ~~~~~~~~~~~~~ ~~~~~~~~~~~~~")
 		end
 
@@ -1113,7 +1118,7 @@ do -- Garbage collection friendly
 	BottomSection:SetTextColor(Cache.Colors.Black)
 
 	CreateSlider(BottomSection, 25, 25, BottomSection:GetWide() - 50, 0, 180, 0, "FOV", Cache.ConVars.Aimbot.FOV)
-	CreateSlider(BottomSection, 25, 50, BottomSection:GetWide() - 50, 0, 1, 1, "Backtrack Amount", Cache.ConVars.Aimbot.BacktrackAmount)
+	CreateSlider(BottomSection, 25, 50, BottomSection:GetWide() - 50, 0, 1, 2, "Backtrack Amount", Cache.ConVars.Aimbot.BacktrackAmount)
 
 	local FOVLabel = vgui_Create("DLabel", BottomSection)
 	FOVLabel:SetPos(25, 80)
