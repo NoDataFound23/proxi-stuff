@@ -217,6 +217,11 @@ local Cache = {
 
 		HvHMode = {
 			"HVHER" -- Fun Server + LBG
+		},
+
+		Protected = {
+			"LibbyProtectedSpawn", -- Libby's
+			"SH_SZ.Safe" -- Safezone addon (Used by LBG)
 		}
 	},
 
@@ -470,6 +475,16 @@ local function PlayerInOpposingHVHMode(Player)
 	return LocalHvH ~= PlayerHvH
 end
 
+local function PlayerIsProtected(Player)
+	for _, v in ipairs(Cache.NetVars.Protected) do
+		if tobool(Player:GetNWInt(v)) then -- This check has to be done a little differently because of how safezones work
+			return true
+		end
+	end
+
+	return false
+end
+
 local function CalculateViewPunch(Weapon)
 	return Weapon:IsScripted() and angle_zero or Cache.LocalPlayer:GetViewPunchAngles()
 end
@@ -590,7 +605,7 @@ local function GetAimTarget()
 
 	for _, v in ipairs(Cache.Players) do
 		if not ValidEntity(v) then continue end
-		if PlayerInBuildMode(v) or PlayerInGodMode(v) or PlayerInOpposingHVHMode(v) then continue end -- Don't bother scanning these players
+		if PlayerInBuildMode(v) or PlayerInGodMode(v) or PlayerInOpposingHVHMode(v) or PlayerIsProtected(v) then continue end -- Don't bother scanning these players
 
 		local Cur, WasW2S = DistanceFromCrosshair(v:WorldSpaceCenter())
 
