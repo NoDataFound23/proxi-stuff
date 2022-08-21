@@ -659,8 +659,8 @@ local function GenerateMultiPoints(Pos, Ang, Mins, Maxs)
 	MP[8] = Vector(pMins.x, pMaxs.y, pMaxs.z)
 
 	for i = 1, #MP do
-		MP[i]:Rotate(Ang)
-		MP[i] = MP[i] + Pos
+		MP[i]:Rotate(Ang) -- Make the multipoints follow the hitbox's rotation
+		MP[i] = MP[i] + Pos -- Move them into position from world origin
 	end
 
 	return MP
