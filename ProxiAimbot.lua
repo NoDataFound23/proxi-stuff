@@ -591,9 +591,7 @@ local function IsVisible(Pos, Entity)
 		mask = MASK_SHOT
 	})
 
-	if IsValid(Entity) then
-		return tr.Entity == Entity, tr.Fraction
-	end
+	return tr.Entity == Entity, tr.Fraction
 end
 
 local function GetAimTarget()
@@ -607,7 +605,10 @@ local function GetAimTarget()
 		if not ValidEntity(v) then continue end
 		if PlayerInBuildMode(v) or PlayerInGodMode(v) or PlayerInOpposingHVHMode(v) or PlayerIsProtected(v) then continue end -- Don't bother scanning these players
 
-		local Cur, WasW2S = DistanceFromCrosshair(v:WorldSpaceCenter())
+		local WorldSpaceCenter = v:WorldSpaceCenter()
+		if not IsVisible(WorldSpaceCenter, v) then continue end
+
+		local Cur, WasW2S = DistanceFromCrosshair(WorldSpaceCenter)
 
 		if Cur <= (WasW2S and WMax or AMax) and Cur < Best then -- Adjust check for W2S
 			Best = Cur
