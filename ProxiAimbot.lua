@@ -16,6 +16,7 @@
 		- HvHmode checks
 		- Anti gesture
 		- Basic corner multipoint for either head only or all hitboxes
+		- Quick scanning mode
 
 	ConVars:
 		pa_debug					-	Controls debug mode					(Default: 0)
