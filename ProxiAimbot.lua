@@ -868,7 +868,7 @@ hook_Add("CreateMove", "pa_CreateMoveEx", function(cmd)
 
 	if Cache.ConVars.Aimbot.Backtrack:GetBool() and Cache.ConVars.Aimbot.Enabled:GetBool() then
 		for _, v in ipairs(Cache.Players) do
-			if not ValidEntity(v) or PlayerInBuildMode(v) or PlayerInGodMode(v) or PlayerInOpposingHVHMode(v) then -- No point in backtracking something you can't shoot at
+			if not ValidEntity(v) or PlayerInBuildMode(v) or PlayerInGodMode(v) or PlayerInOpposingHVHMode(v) or PlayerIsProtected(v) then -- No point in backtracking something you can't shoot at
 				Cache.AimbotData.Backtrack[v] = nil
 				continue
 			end
