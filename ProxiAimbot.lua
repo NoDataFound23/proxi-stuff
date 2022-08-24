@@ -215,7 +215,9 @@ local Cache = {
 		},
 
 		GodMode = {
-			"has_god" -- Fun Server + LBG
+			"has_god", -- Fun Server + LBG
+			"god_mode",
+			"ugod"
 		},
 
 		HvHMode = {
@@ -224,7 +226,9 @@ local Cache = {
 
 		Protected = {
 			"LibbyProtectedSpawn", -- Libby's
-			"SH_SZ.Safe" -- Safezone addon (Used by LBG)
+			"SH_SZ.Safe", -- Safezone addon (Used by LBG)
+			"spawn_protect",
+			"InSpawnZone"
 		}
 	},
 
@@ -718,8 +722,8 @@ local function GetAimTarget(Fast)
 
 						if Cur > (WasW2S and WMax or AMax) then continue end
 
-						local Visible, Fr = IsVisible(hPos, v)
-						if not Visible then continue end
+						local Visible, Fr = IsVisible(hPos)
+						if Fr < 0.99 then continue end
 
 						if Cur < Best then -- Breaks priority a little bit but it's better than randomly aiming at body
 							return v, hPos, h.Tick, Set, Fr
