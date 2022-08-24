@@ -503,7 +503,7 @@ local function CalculateNoSpread(Weapon, cmd, pAngle)
 		return pAngle
 	end
 
-	local Seed = md5.PseudoRandom(cmd:CommandNumber())
+	local Seed = cmd:GetRandomSeed()
 
 	local X = md5.EngineSpread[Seed][1]
 	local Y = md5.EngineSpread[Seed][2]
