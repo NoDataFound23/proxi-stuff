@@ -34,6 +34,7 @@
 		pa_antigesture				-	Controls anti gesture				(Default: 0)
 		pa_multipoint				-	Controls mutlipoint					(Default: 1)
 		pa_multipoint_everything	-	Controls multipointing every hitbox	(Default: 0)
+		pa_quickscan				-	Controls quick target scanning		(Default: 0)
 
 	ConCommands:
 		pa_menu						-	Opens the menu
@@ -123,7 +124,7 @@ local hook_Add = hook.Add
 
 local timer_Create = timer.Create
 
-local table_GetKeys = table.GetKeys
+local table_HasValue = table.HasValue
 local table_remove = table.remove
 
 local util_TraceLine = util.TraceLine
@@ -198,6 +199,7 @@ local Cache = {
 			AntiGesture = CreateClientConVar("pa_antigesture", 0, true, false, "", 0, 1),
 			MultiPoint = CreateClientConVar("pa_multipoint", 1, true, false, "", 0, 1),
 			MultiPointAll = CreateClientConVar("pa_multipoint_everything", 0, true, false, "", 0, 1),
+			QuickScanning = CreateClientConVar("pa_quickscan", 0, true, false, "", 0, 1),
 
 			FOVOutline = CreateClientConVar("pa_fov_color_outline", "255 255 255 255", true, false, "")
 		}
@@ -594,52 +596,6 @@ local function IsVisible(Pos, Entity)
 	return tr.Entity == Entity, tr.Fraction
 end
 
-local function GetAimTarget()
-	local AMax = Cache.ConVars.Aimbot.FOV:GetInt()
-	local WMax = GetFOVRadius()
-
-	local Best = math_huge
-	local Entity = NULL
-
-	for _, v in ipairs(Cache.Players) do
-		if not ValidEntity(v) then continue end
-		if PlayerInBuildMode(v) or PlayerInGodMode(v) or PlayerInOpposingHVHMode(v) or PlayerIsProtected(v) then continue end -- Don't bother scanning these players
-
-		local WorldSpaceCenter = v:WorldSpaceCenter()
-		if not IsVisible(WorldSpaceCenter, v) then continue end
-
-		local Cur, WasW2S = DistanceFromCrosshair(WorldSpaceCenter)
-
-		if Cur <= (WasW2S and WMax or AMax) and Cur < Best then -- Adjust check for W2S
-			Best = Cur
-			Entity = v
-		end
-
-		if Cache.ConVars.Aimbot.Backtrack:GetBool() and Cache.AimbotData.Backtrack[v] then -- Best table organization you've ever seen
-			for _, h in ipairs(Cache.AimbotData.Backtrack[v]) do
-				for _, Set in ipairs(Cache.AimbotData.ScanOrder) do
-					if not h.hData[Set] then continue end
-
-					for _, hPos in ipairs(h.hData[Set]) do
-						Cur, WasW2S = DistanceFromCrosshair(hPos)
-
-						if Cur > (WasW2S and WMax or AMax) then continue end
-
-						local Visible, Fr = IsVisible(hPos, v)
-						if not Visible then continue end
-
-						if Cur < Best then -- Breaks priority a little bit but it's better than randomly aiming at body
-							return v, hPos, h.Tick, Set, Fr
-						end
-					end
-				end
-			end
-		end
-	end
-
-	return Entity
-end
-
 local function GenerateMultiPoints(Pos, Ang, Mins, Maxs)
 	-- Inset points a little for accuracy
 
@@ -678,7 +634,7 @@ local function GetEntityHitboxes(Entity)
 	for HitSet = 0, Entity:GetHitboxSetCount() - 1 do
 		for HitBox = 0, Entity:GetHitBoxCount(HitSet) - 1 do
 			local HitGroup = Entity:GetHitBoxHitGroup(HitBox, HitSet)
-			if not HitGroup then continue end
+			if not HitGroup or not table_HasValue(Cache.AimbotData.ScanOrder, HitGroup) then continue end
 
 			hData[HitGroup] = hData[HitGroup] or {}
 
@@ -710,13 +666,79 @@ local function GetEntityHitboxes(Entity)
 	return hData
 end
 
+local function GetAimTarget(Fast)
+	local AMax = Cache.ConVars.Aimbot.FOV:GetInt()
+	local WMax = GetFOVRadius()
+
+	local Best = math_huge
+	local Entity = NULL
+
+	for _, v in ipairs(Cache.Players) do
+		if not ValidEntity(v) then continue end
+		if PlayerInBuildMode(v) or PlayerInGodMode(v) or PlayerInOpposingHVHMode(v) or PlayerIsProtected(v) then continue end -- Don't bother scanning these players
+
+		if Fast then
+			local WorldSpaceCenter = v:WorldSpaceCenter()
+			if not IsVisible(WorldSpaceCenter, v) then continue end
+		else
+			local phData = GetEntityHitboxes(v)
+			local pVisible = false
+
+			for _, Set in ipairs(Cache.AimbotData.ScanOrder) do
+				if not phData[Set] then continue end
+
+				for _, p in ipairs(phData[Set]) do
+					if IsVisible(p, v) then
+						pVisible = true
+						break
+					end
+				end
+
+				if pVisible then break end
+			end
+
+			if not pVisible then continue end
+		end
+
+		local Cur, WasW2S = DistanceFromCrosshair(WorldSpaceCenter)
+
+		if Cur <= (WasW2S and WMax or AMax) and Cur < Best then -- Adjust check for W2S
+			Best = Cur
+			Entity = v
+		end
+
+		if Cache.ConVars.Aimbot.Backtrack:GetBool() and Cache.AimbotData.Backtrack[v] then -- Best table organization you've ever seen
+			for _, h in ipairs(Cache.AimbotData.Backtrack[v]) do
+				for _, Set in ipairs(Cache.AimbotData.ScanOrder) do
+					if not h.hData[Set] then continue end
+
+					for _, hPos in ipairs(h.hData[Set]) do
+						Cur, WasW2S = DistanceFromCrosshair(hPos)
+
+						if Cur > (WasW2S and WMax or AMax) then continue end
+
+						local Visible, Fr = IsVisible(hPos, v)
+						if not Visible then continue end
+
+						if Cur < Best then -- Breaks priority a little bit but it's better than randomly aiming at body
+							return v, hPos, h.Tick, Set, Fr
+						end
+					end
+				end
+			end
+		end
+	end
+
+	return Entity
+end
+
 local function GetAvailablePositions(Entity)
 	local EMPTY = true
 
 	local phData = GetEntityHitboxes(Entity)
 	local hData = {}
 
-	for _, v in ipairs(table_GetKeys(Cache.AimbotData.ScanOrder)) do
+	for _, v in ipairs(Cache.AimbotData.ScanOrder) do
 		hData[v] = {}
 	end
 
@@ -880,7 +902,7 @@ hook.Add("CreateMoveEx", "pa_CreateMoveEx", function(cmd)
 	local Weapon = Cache.LocalPlayer:GetActiveWeapon()
 
 	if Cache.ConVars.Aimbot.Enabled:GetBool() and input_IsButtonDown(Cache.ConVars.Aimbot.Key:GetInt()) and IsValid(Weapon) and WeaponCanShoot(Weapon) then
-		local Target, bPos, bTick, bHitGroup, bFraction = GetAimTarget()
+		local Target, bPos, bTick, bHitGroup, bFraction = GetAimTarget(Cache.ConVars.Aimbot.QuickScanning:GetBool())
 		if not IsValid(Target) then return end
 
 		Cache.AimbotData.Target = Target
@@ -1050,17 +1072,8 @@ do -- Garbage collection friendly
 		CheckBox:SetTextColor(Cache.Colors.Black)
 		CheckBox:SetText(Label)
 		CheckBox:SetPos(X, Y)
+		CheckBox:SetConVar(ConVar:GetName())
 		CheckBox:SetChecked(ConVar:GetBool())
-
-		CheckBox._ConVar = ConVar
-
-		CheckBox.OnChange = function(self, NewValue)
-			self._ConVar:SetBool(NewValue)
-		end
-
-		CheckBox.Think = function(self)
-			self:SetChecked(self._ConVar:GetBool())
-		end
 	end
 
 	local function CreateSlider(Parent, X, Y, Width, Min, Max, Decimals, Label, ConVar)
@@ -1088,7 +1101,7 @@ do -- Garbage collection friendly
 	end
 
 	local Main = vgui_Create("DFrame")
-	Main:SetSize(400, 590)
+	Main:SetSize(400, 615)
 	Main:Center()
 	Main:SetTitle("Proxi Aimbot")
 	Main:SetSizable(false)
@@ -1102,7 +1115,7 @@ do -- Garbage collection friendly
 	--------------------------- Top Part ---------------------------
 
 	local TopSection = vgui_Create("DSection", MainFrame)
-	TopSection:SetSize(MainFrame:GetWide() - 10, 328)
+	TopSection:SetSize(MainFrame:GetWide() - 10, 353)
 	TopSection:SetPos(5, 5)
 	TopSection:SetText("Options")
 	TopSection:SetTextColor(Cache.Colors.Black)
@@ -1119,6 +1132,7 @@ do -- Garbage collection friendly
 	CreateCheckBox(TopSection, 50, 250, "Multipoint", Cache.ConVars.Aimbot.MultiPoint)
 	CreateCheckBox(TopSection, 75, 275, "Multipoint Every Hitbox", Cache.ConVars.Aimbot.MultiPointAll)
 	CreateCheckBox(TopSection, 50, 300, "Disable Animation Lerp", Cache.ConVars.Aimbot.AnimLerp)
+	CreateCheckBox(TopSection, 50, 325, "Quick Scanning", Cache.ConVars.Aimbot.QuickScanning)
 
 	local KeyBinder = vgui_Create("DBinder", TopSection)
 	KeyBinder:SetSize(100, 25)
