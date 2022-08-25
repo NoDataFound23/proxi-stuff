@@ -210,8 +210,7 @@ local Cache = {
 		BuildMode = {
 			"BuildMode", -- Libby's
 			"buildmode", -- Fun Server
-			"_Kyle_Buildmode", -- Workshop addon
-			"BuildMode"
+			"_Kyle_Buildmode" -- Workshop addon
 		},
 
 		GodMode = {
