@@ -562,7 +562,7 @@ local function WeaponCanShoot(Weapon)
 end
 
 local function DistanceFromCrosshair(Pos)
-	if not Pos then return 360 end
+	if not Pos then return 360, false end
 
 	local sPos = Pos:ToScreen()
 	local pRad = GetFOVRadius()
@@ -681,8 +681,9 @@ local function GetAimTarget(Fast)
 		if not ValidEntity(v) then continue end
 		if PlayerInBuildMode(v) or PlayerInGodMode(v) or PlayerInOpposingHVHMode(v) or PlayerIsProtected(v) then continue end -- Don't bother scanning these players
 
+		local WorldSpaceCenter = v:WorldSpaceCenter()
+
 		if Fast then
-			local WorldSpaceCenter = v:WorldSpaceCenter()
 			if not IsVisible(WorldSpaceCenter, v) then continue end
 		else
 			local phData = GetEntityHitboxes(v)
