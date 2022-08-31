@@ -17,6 +17,7 @@
 		- Anti gesture
 		- Basic corner multipoint for either head only or all hitboxes
 		- Quick scanning mode
+		- Target Indicators
 
 	ConVars:
 		pa_debug					-	Controls debug mode					(Default: 0)
@@ -36,6 +37,7 @@
 		pa_multipoint				-	Controls mutlipoint					(Default: 1)
 		pa_multipoint_everything	-	Controls multipointing every hitbox	(Default: 0)
 		pa_quickscan				-	Controls quick target scanning		(Default: 0)
+		pa_indicator				-	Controls target indicators			(Default: 0)
 
 	ConCommands:
 		pa_menu						-	Opens the menu
@@ -43,6 +45,7 @@
 	Requires proxi (Duh)
 	Requires https://github.com/awesomeusername69420/miscellaneous-gmod-stuff/blob/main/Includes/modules/md5.lua (Anti Spread)
 	Requires https://github.com/awesomeusername69420/miscellaneous-gmod-stuff/blob/main/vgui/dsection.lua (For the menu)
+	Requires https://github.com/Facepunch/garrysmod/pull/1590 (For indicators, falls back to halos if not found)
 ]]
 
 local IsIdiot = false
@@ -51,15 +54,16 @@ if IsIdiot or proxi == nil then MsgC(Color(255, 0, 0), ("YOU DON'T HAVE PROXI YO
 
 jit.flush() -- Wat da
 
-pcall(include, "includes/modules/md5.lua")
 pcall(include, "vgui/dsection.lua")
+pcall(require, "md5")
+pcall(require, "outline")
 
 --------------------------- Localization ---------------------------
 
 local meta_cl = proxi._R.Color
 
-local FRAME_NET_UPDATE_START = proxi.FRAME_NET_UPDATE_START
-local FRAME_NET_UPDATE_END = proxi.FRAME_NET_UPDATE_END
+local FRAME_RENDER_START = proxi.FRAME_RENDER_START
+local FRAME_RENDER_END= proxi.FRAME_RENDER_END
 
 local GESTURE_SLOT_VCD = GESTURE_SLOT_VCD
 local HITGROUP_CHEST = HITGROUP_CHEST
@@ -86,6 +90,9 @@ local ipairs = ipairs
 local print = print
 local setmetatable = setmetatable
 local tobool = tobool
+
+local cam_Start3D = cam.Start3D
+local cam_End3D = cam.End3D
 
 local player_GetAll = player.GetAll
 
@@ -158,9 +165,8 @@ local Cache = {
 		White = Color(255, 255, 255, 255),
 		Black = Color(0, 0, 0, 255),
 
-		FOV = {
-			Outline = Color(255, 255, 255, 255),
-		}
+		FOV = Color(255, 255, 255, 255),
+		Indicator = Color(255, 0, 0, 255)
 	},
 
 	CalcViewData = {
@@ -201,8 +207,10 @@ local Cache = {
 			MultiPoint = CreateClientConVar("pa_multipoint", 1, true, false, "", 0, 1),
 			MultiPointAll = CreateClientConVar("pa_multipoint_everything", 0, true, false, "", 0, 1),
 			QuickScanning = CreateClientConVar("pa_quickscan", 0, true, false, "", 0, 1),
+			Indicator = CreateClientConVar("pa_indicator", 0, true, false, "", 0, 1),
 
-			FOVOutline = CreateClientConVar("pa_fov_color_outline", "255 255 255 255", true, false, "")
+			FOVOutline = CreateClientConVar("pa_fov_color_outline", "255 255 255 255", true, false, ""),
+			IndicatorOutline = CreateClientConVar("pa_indicator_color", "255 0 0 255", true, false, "")
 		}
 	},
 
@@ -819,20 +827,28 @@ end)
 
 hook_Add("HUDPaint", "pa_HUDPaint", function()
 	if not Cache.ConVars.cl_drawhud:GetBool() or Cache.ConVars.Aimbot.FOV:GetInt() > 60 then return end
+	surface_DrawCircle(Cache.ScrW / 2, Cache.ScrH / 2,  GetFOVRadius(), Cache.Colors.FOV)
+end)
 
-	surface_DrawCircle(Cache.ScrW / 2, Cache.ScrH / 2,  GetFOVRadius(), Cache.Colors.FOV.Outline)
+hook_Add("PreDrawHalos", "pa_PreDrawHalos", function()
+	if not Cache.ConVars.cl_drawhud:GetBool() or not Cache.ConVars.Aimbot.Indicator:GetBool() or not ValidEntity(Cache.AimbotData.Target) then return end
+
+	if outline then
+		outline.Add(Cache.AimbotData.Target, Cache.Colors.Indicator, OUTLINE_MODE_BOTH)
+	else
+		halo.Add(Cache.AimbotData.Target, Cache.Colors.Indicator, 1, 1, 1, false, true)
+	end
 end)
 
 hook_Add("PreFrameStageNotify", "pa_PreFrameStageNotify", function(stage)
 	if not IsValid(Cache.AimbotData.Target) then return end
 
-	if stage == FRAME_NET_UPDATE_START then -- Disable lerp for target during aiming
+	if stage == FRAME_RENDER_START then -- Disable lerp for target during aiming
 		pSetInterpolationEnabled(Cache.AimbotData.Target, false)
 	end
 
-	if stage == FRAME_NET_UPDATE_END then -- Reenable lerp afterwards
+	if stage == FRAME_RENDER_END then -- Reenable lerp afterwards
 		pSetInterpolationEnabled(Cache.AimbotData.Target, true)
-		Cache.AimbotData.Target = NULL
 	end
 end)
 
@@ -906,61 +922,65 @@ hook.Add("CreateMoveEx", "pa_CreateMoveEx", function(cmd)
 
 	local Weapon = Cache.LocalPlayer:GetActiveWeapon()
 
-	if Cache.ConVars.Aimbot.Enabled:GetBool() and input_IsButtonDown(Cache.ConVars.Aimbot.Key:GetInt()) and IsValid(Weapon) and WeaponCanShoot(Weapon) then
-		local Target, bPos, bTick, bHitGroup, bFraction = GetAimTarget(Cache.ConVars.Aimbot.QuickScanning:GetBool())
-		if not IsValid(Target) then return end
+	if Cache.ConVars.Aimbot.Enabled:GetBool() and input_IsButtonDown(Cache.ConVars.Aimbot.Key:GetInt()) then
+		if IsValid(Weapon) and WeaponCanShoot(Weapon) then
+			local Target, bPos, bTick, bHitGroup, bFraction = GetAimTarget(Cache.ConVars.Aimbot.QuickScanning:GetBool())
+			if not IsValid(Target) then return end
 
-		Cache.AimbotData.Target = Target
+			Cache.AimbotData.Target = Target
 
-		local Pos
-		local HitGroup
-		local Fraction
+			local Pos
+			local HitGroup
+			local Fraction
 
-		if bPos then
-			Pos = bPos
-			HitGroup = bHitGroup
-			Fraction = bFraction
-		else
-			Pos, HitGroup, Fraction = GetAimPosition(Target)
-		end
-
-		if not Pos then return end
-
-		local TargetSimTime = bTick and TickToTime(bTick) or GetEntitySimTime(Target)
-		local TargetSimTick = bTick or TimeToTick(TargetSimTime)
-
-		if GetServerTime() - TargetSimTime <= Cache.ConVars.Aimbot.BacktrackAmount:GetFloat() then -- Don't set tick count for people who are lagging
-			cmd:SetTickCount(TargetSimTick)
-		end
-
-		if Cache.ConVars.Aimbot.DEBUGMODE:GetBool() then
-			print("~~~~~~~~~~~~~ Processed Data For " .. tostring(Target) .. " ~~~~~~~~~~~~~")
-			print("Position: " .. tostring(Pos))
-			print("HitGroup: " .. tostring(Cache.HitgroupTranslation[HitGroup]))
-			print("Backtrack? : " .. tostring(tobool(bPos)))
-			print("Target Sim Tick: " .. TargetSimTick)
-			print("Target Sim Time: " .. TargetSimTime)
-			print("Server Time: " .. GetServerTime())
-			print("Target Sim Dif: " .. (GetServerTime() - TargetSimTime))
-			print("Fraction: " .. tostring(Fraction))
-			print("~~~~~~~~~~~~~ ~~~~~~~~~~~~~ ~~~~~~~~~~~~~ ~~~~~~~~~~~~~")
-		end
-
-		pStartPrediction(cmd)
-			local pAngle = (Pos - Cache.LocalPlayer:EyePos()):Angle()
-			local sAngle = CalculateNoSpread(Weapon, cmd, pAngle)
-
-			Cache.AimbotData.Angle = sAngle - CalculateViewPunch(Weapon)
-			Cache.AimbotData.Active = true
-
-			if Cache.ConVars.Aimbot.AutoShoot:GetBool() then
-				cmd:AddKey(IN_ATTACK)
+			if bPos then
+				Pos = bPos
+				HitGroup = bHitGroup
+				Fraction = bFraction
+			else
+				Pos, HitGroup, Fraction = GetAimPosition(Target)
 			end
-		pEndPrediction()
 
-		if Cache.ConVars.Aimbot.FixMovement:GetBool() then
-			FixMovement(cmd)
+			if not Pos then return end
+
+			local TargetSimTime = bTick and TickToTime(bTick) or GetEntitySimTime(Target)
+			local TargetSimTick = bTick or TimeToTick(TargetSimTime)
+
+			if GetServerTime() - TargetSimTime <= Cache.ConVars.Aimbot.BacktrackAmount:GetFloat() then -- Don't set tick count for people who are lagging
+				cmd:SetTickCount(TargetSimTick)
+			end
+
+			if Cache.ConVars.Aimbot.DEBUGMODE:GetBool() then
+				print("~~~~~~~~~~~~~ Processed Data For " .. tostring(Target) .. " ~~~~~~~~~~~~~")
+				print("Position: " .. tostring(Pos))
+				print("HitGroup: " .. tostring(Cache.HitgroupTranslation[HitGroup]))
+				print("Backtrack? : " .. tostring(tobool(bPos)))
+				print("Target Sim Tick: " .. TargetSimTick)
+				print("Target Sim Time: " .. TargetSimTime)
+				print("Server Time: " .. GetServerTime())
+				print("Target Sim Dif: " .. (GetServerTime() - TargetSimTime))
+				print("Fraction: " .. tostring(Fraction))
+				print("~~~~~~~~~~~~~ ~~~~~~~~~~~~~ ~~~~~~~~~~~~~ ~~~~~~~~~~~~~")
+			end
+
+			pStartPrediction(cmd)
+				local pAngle = (Pos - Cache.LocalPlayer:EyePos()):Angle()
+				local sAngle = CalculateNoSpread(Weapon, cmd, pAngle)
+
+				Cache.AimbotData.Angle = sAngle - CalculateViewPunch(Weapon)
+				Cache.AimbotData.Active = true
+
+				if Cache.ConVars.Aimbot.AutoShoot:GetBool() then
+					cmd:AddKey(IN_ATTACK)
+				end
+			pEndPrediction()
+
+			if Cache.ConVars.Aimbot.FixMovement:GetBool() then
+				FixMovement(cmd)
+			end
 		end
+	else
+		Cache.AimbotData.Target = NULL
 	end
 
 	if not Cache.AimbotData.Active and cmd:KeyDown(IN_ATTACK) and IsValid(Weapon) and WeaponCanShoot(Weapon) then
@@ -1058,7 +1078,11 @@ end)
 --------------------------- CVar Stuff ---------------------------
 
 cvars_AddChangeCallback("pa_fov_color_outline", function(_, _, NewValue)
-	Cache.Colors.FOV.Outline = string_ToColor(NewValue)
+	Cache.Colors.FOV = string_ToColor(NewValue)
+end)
+
+cvars_AddChangeCallback("pa_indicator_color", function(_, _, NewValue)
+	Cache.Colors.Indicator = string_ToColor(NewValue)
 end)
 
 cvars_AddChangeCallback("pa_animlerp", function(_, _, NewValue)
@@ -1106,7 +1130,7 @@ do -- Garbage collection friendly
 	end
 
 	local Main = vgui_Create("DFrame")
-	Main:SetSize(400, 615)
+	Main:SetSize(400, 760)
 	Main:Center()
 	Main:SetTitle("Proxi Aimbot")
 	Main:SetSizable(false)
@@ -1120,7 +1144,7 @@ do -- Garbage collection friendly
 	--------------------------- Top Part ---------------------------
 
 	local TopSection = vgui_Create("DSection", MainFrame)
-	TopSection:SetSize(MainFrame:GetWide() - 10, 353)
+	TopSection:SetSize(MainFrame:GetWide() - 10, 378)
 	TopSection:SetPos(5, 5)
 	TopSection:SetText("Options")
 	TopSection:SetTextColor(Cache.Colors.Black)
@@ -1138,6 +1162,7 @@ do -- Garbage collection friendly
 	CreateCheckBox(TopSection, 75, 275, "Multipoint Every Hitbox", Cache.ConVars.Aimbot.MultiPointAll)
 	CreateCheckBox(TopSection, 50, 300, "Disable Animation Lerp", Cache.ConVars.Aimbot.AnimLerp)
 	CreateCheckBox(TopSection, 50, 325, "Quick Scanning", Cache.ConVars.Aimbot.QuickScanning)
+	CreateCheckBox(TopSection, 50, 350, "Target Indicator", Cache.ConVars.Aimbot.Indicator)
 
 	local KeyBinder = vgui_Create("DBinder", TopSection)
 	KeyBinder:SetSize(100, 25)
@@ -1177,7 +1202,32 @@ do -- Garbage collection friendly
 	FOVColor.Think = function(self)
 		self._oThink(self)
 
-		self:SetColor(Cache.Colors.FOV.Outline)
+		self:SetColor(Cache.Colors.FOV)
+	end
+
+	local IndicatorLabel = vgui_Create("DLabel", BottomSection)
+	IndicatorLabel:SetPos(25, 215)
+	IndicatorLabel:SetWide(125)
+	IndicatorLabel:SetText("Indicator Color")
+	IndicatorLabel:SetTextColor(Cache.Colors.Black)
+
+	local IndicatorColor = vgui_Create("DColorMixer", BottomSection)
+	IndicatorColor:SetPalette(false)
+	IndicatorColor:SetSize(215, 100)
+	IndicatorColor:SetPos(25, 230)
+
+	IndicatorColor.ValueChanged = function(_, NewColor)
+		NewColor = setmetatable(NewColor, meta_cl)
+
+		Cache.ConVars.Aimbot.IndicatorOutline:SetString(tostring(NewColor))
+	end
+	
+	IndicatorColor._oThink = IndicatorColor.Think
+
+	IndicatorColor.Think = function(self)
+		self._oThink(self)
+
+		self:SetColor(Cache.Colors.Indicator)
 	end
 
 	Cache.Menu = Main
