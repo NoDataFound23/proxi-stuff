@@ -105,6 +105,8 @@ local math_atan = math.atan
 local math_cos = math.cos
 local math_deg = math.deg
 local math_huge = math.huge
+local math_max = math.max
+local math_min = math.min
 local math_pi = math.pi
 local math_rad = math.rad
 local math_sin = math.sin
@@ -182,9 +184,13 @@ local Cache = {
 
 		cl_drawhud = pGetConVar("cl_drawhud"),
 		cl_interp = pGetConVar("cl_interp"),
+		cl_interp_ratio = pGetConVar("cl_interp_ratio"),
 		cl_interpolate = pGetConVar("cl_interpolate"),
+		cl_updaterate = pGetConVar("cl_updaterate"),
 
 		fov_desired = pGetConVar("fov_desired"),
+
+		sv_maxunlag = pGetConVar("sv_maxunlag"),
 
 		Aimbot = {
 			DEBUGMODE = CreateClientConVar("pa_debug", 0, false, false, "", 0, 1),
@@ -434,8 +440,17 @@ local function ValidEntity(Entity)
 	return Entity ~= Cache.LocalPlayer and Entity:Alive() and Entity:Team() ~= TEAM_SPECTATOR and Entity:GetObserverMode() == OBS_MODE_NONE and not Entity:IsDormant()
 end
 
+local function GetInterpTime()
+	if not Cache.ConVars.cl_interpolate:GetBool() then return 0 end
+
+	local Ratio = Cache.ConVars.cl_interp_ratio:GetFloat()
+	if Ratio == 0 then Ratio = 1 end
+	
+	return math_max(Cache.ConVars.cl_interp:GetFloat(), Ratio / Cache.ConVars.cl_updaterate:GetFloat())
+end
+
 local function TimeToTick(Time)
-	return math.floor(0.5 + (Time / Cache.TickInterval))
+	return math.floor(0.5 + (Time / Cache.TickInterval)) + math_min(GetInterpTime(), Cache.ConVars.sv_maxunlag:GetInt())
 end
 
 local function TickToTime(Tick)
@@ -946,7 +961,9 @@ hook.Add("CreateMoveEx", "pa_CreateMoveEx", function(cmd)
 			local TargetSimTime = bTick and TickToTime(bTick) or GetEntitySimTime(Target)
 			local TargetSimTick = bTick or TimeToTick(TargetSimTime)
 
-			if GetServerTime() - TargetSimTime <= Cache.ConVars.Aimbot.BacktrackAmount:GetFloat() then -- Don't set tick count for people who are lagging
+			local SvTime = GetServerTime()
+
+			if SvTime - TargetSimTime <= Cache.ConVars.Aimbot.BacktrackAmount:GetFloat() then -- Don't set tick count for people who are lagging
 				cmd:SetTickCount(TargetSimTick)
 			end
 
@@ -957,8 +974,8 @@ hook.Add("CreateMoveEx", "pa_CreateMoveEx", function(cmd)
 				print("Backtrack? : " .. tostring(tobool(bPos)))
 				print("Target Sim Tick: " .. TargetSimTick)
 				print("Target Sim Time: " .. TargetSimTime)
-				print("Server Time: " .. GetServerTime())
-				print("Target Sim Dif: " .. (GetServerTime() - TargetSimTime))
+				print("Server Time: " .. SvTime)
+				print("Target Sim Dif: " .. (SvTime - TargetSimTime))
 				print("Fraction: " .. tostring(Fraction))
 				print("~~~~~~~~~~~~~ ~~~~~~~~~~~~~ ~~~~~~~~~~~~~ ~~~~~~~~~~~~~")
 			end
@@ -995,8 +1012,13 @@ hook.Add("CreateMoveEx", "pa_CreateMoveEx", function(cmd)
 	end
 end)
 
-hook_Add("CalcView", "", function(Player, EyePos, EyeAngles, FOV, ZNear, ZFar)
+hook_Add("CalcView", "", function(Player, EyePos, EyeAngles, FOV, ZNear, ZFar, RetardedServer)
 	if not IsValid(Player) then return end
+
+	if RetardedServer then -- 208.103.169.66
+		ZNear = ZFar
+		ZFar = RetardedServer
+	end
 
 	EyeAngles = Cache.FacingAngle * 1
 
@@ -1086,11 +1108,13 @@ cvars_AddChangeCallback("pa_indicator_color", function(_, _, NewValue)
 end)
 
 cvars_AddChangeCallback("pa_animlerp", function(_, _, NewValue)
-	pDisableAnimInterp(not tobool(NewValue))
+	NewValue = tobool(NewValue)
+
+	Cache.ConVars.cl_interpolate:ForceBool(NewValue)
+	pDisableAnimInterp(not NewValue)
 end)
 
-Cache.ConVars.cl_interpolate:ForceBool(false) -- This should maybe be somewhere else but ehhhh
-Cache.ConVars.cl_interp:ForceFloat(0)
+Cache.ConVars.cl_interp:ForceFloat(0) -- cl_interp 0
 Cache.ConVars.cl_interp:SendValue(0)
 
 --------------------------- Menu Setup ---------------------------
@@ -1160,7 +1184,7 @@ do -- Garbage collection friendly
 	CreateCheckBox(TopSection, 50, 225, "Anti Gesture", Cache.ConVars.Aimbot.AntiGesture)
 	CreateCheckBox(TopSection, 50, 250, "Multipoint", Cache.ConVars.Aimbot.MultiPoint)
 	CreateCheckBox(TopSection, 75, 275, "Multipoint Every Hitbox", Cache.ConVars.Aimbot.MultiPointAll)
-	CreateCheckBox(TopSection, 50, 300, "Disable Animation Lerp", Cache.ConVars.Aimbot.AnimLerp)
+	CreateCheckBox(TopSection, 50, 300, "Enable Animation Lerp", Cache.ConVars.Aimbot.AnimLerp)
 	CreateCheckBox(TopSection, 50, 325, "Quick Scanning", Cache.ConVars.Aimbot.QuickScanning)
 	CreateCheckBox(TopSection, 50, 350, "Target Indicator", Cache.ConVars.Aimbot.Indicator)
 
