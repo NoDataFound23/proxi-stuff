@@ -136,7 +136,8 @@ local Data = {
 			WeaponData = {
 				AntiSpread = {
 					Cones = {},
-					Seeds = {}
+					Seeds = {},
+					Storage = {}
 				},
 
 				AutoShoot = {
@@ -282,6 +283,7 @@ do
 	ENV.Localize("next")
 	ENV.Localize("tobool")
 	ENV.Localize("tostring")
+	ENV.Localize("type")
 	ENV.Localize("unpack")
 
 	-- Libraries
@@ -1081,20 +1083,24 @@ do
 
 	-- Adjusts for aim punch
 	ENV.CreateFunction("CalculateAntiRecoil", function(Weapon)
-		return Weapon:IsScripted() and Angle(0, 0, 0) or Cache.LocalPlayer:GetViewPunchAngles()
+		return (Weapon:IsScripted() or Weapon:GetClass() == "weapon_pistol") and Angle(0, 0, 0) or Cache.LocalPlayer:GetViewPunchAngles()
 	end)
 
 	-- Adjusts for bullet spread
 	ENV.CreateFunction("CalculateAntiSpread", function(Weapon, Command, ForwardAngle)
 		if not Variables.AntiSpread then return ForwardAngle end
 
-		if Weapon:IsScripted() then
+		if Weapon:IsScripted() or Weapon:GetClass() == "weapon_pistol" then
 			Command:SetRandomSeed(33)
 			return ForwardAngle
 		end
 
 		local WeaponCone = Cache.WeaponData.AntiSpread.Cones[Weapon:GetClass()]
 		if not WeaponCone then return ForwardAngle end
+
+		if type(WeaponCone) == "function" then
+			WeaponCone = WeaponCone(Weapon, Command)
+		end
 
 		local Seed = Command:GetRandomSeed()
 
@@ -1334,7 +1340,7 @@ do
 
 	ENV.Log("Setting up AntiSpread seeds")
 
-	-- Claned up version of Homonovus' generation
+	-- Cleaned up version of Homonovus' generation
 	do -- Do inside of a do oh my goodness what will he think of next
 		local RandomStream = ENV.CUniformRandomStream.New()
 
@@ -1373,6 +1379,28 @@ do
 			 }
 
 			--ENV.Log("AntiSpread seed '{Grey}", Seed, "{$Reset}' is at {Grey}X{$Reset}: {Grey}", X, " Y{$Reset}: {Grey}", Y, " Z{$Reset}: {Grey}", Z)
+		end
+	end
+
+	ENV.Log("Setting up AntiSpread functions")
+
+	Cache.WeaponData.AntiSpread.Storage.weapon_glock_hl1_attack = ENV.Vector(0.1, 0.1, 0.1)
+	Cache.WeaponData.AntiSpread.Storage.weapon_glock_hl1_neutral = ENV.Vector(0.01, 0.01, 0.01)
+	Cache.WeaponData.AntiSpread.Cones.weapon_glock_hl1 = function(Weapon, Command)
+		if Command:KeyDown(IN_ATTACK) then
+			return Cache.WeaponData.AntiSpread.Storage.weapon_glock_hl1_attack
+		else
+			return Cache.WeaponData.AntiSpread.Storage.weapon_glock_hl1_neutral
+		end
+	end
+
+	Cache.WeaponData.AntiSpread.Storage.weapon_shotgun_hl1_attack = ENV.Vector(0.17432, 0.04358)
+	Cache.WeaponData.AntiSpread.Storage.weapon_shotgun_hl1_neutral = ENV.Vector(0.08716, 0.04358)
+	Cache.WeaponData.AntiSpread.Cones.weapon_shotgun_hl1 = function(Weapon, Command)
+		if Command:KeyDown(IN_ATTACK) then
+			return Cache.WeaponData.AntiSpread.Storage.weapon_shotgun_hl1_attack
+		else
+			return Cache.WeaponData.AntiSpread.Storage.weapon_shotgun_hl1_neutral
 		end
 	end
 
@@ -1639,7 +1667,9 @@ do
 		local Weapon = Entity:GetActiveWeapon()
 		if not Weapon:IsValid() then return end
 
-		Cache.WeaponData.AntiSpread.Cones[Weapon:GetClass()] = Data.Spread
+		if not Cache.WeaponData.AntiSpread.Cones[Weapon:GetClass()] then
+			Cache.WeaponData.AntiSpread.Cones[Weapon:GetClass()] = Vector(Data.Spread)
+		end
 	end)
 
 	-- Readjusts everything
@@ -1681,12 +1711,6 @@ do
 
 		local KeyDown = Variables.Key.Enabled and input.IsButtonDown(Variables.Key.Code) or not Variables.Key.Enabled
 
-		if Variables.Backtrack.Enabled then
-			local CurTime = GetServerTime()
-
-
-		end
-
 		if KeyDown and WeaponCanShoot(Weapon) then
 			local Target, Hitboxes, Penetrations, IsBacktrack, SimulationTick = GetAimbotTarget()
 			if not IsValid(Target) then return end
@@ -1704,8 +1728,6 @@ do
 				local Direction = (Position - Cache.LocalPlayer:EyePos()):Angle()
 				FixAngle(Direction)
 
-				Command:SetViewAngles(Direction)
-
 				if Variables.AutoShoot then
 					Command:AddKey(IN_ATTACK)
 				end
@@ -1714,15 +1736,19 @@ do
 					FixMovement(Command)
 				end
 
-				if Variables.AntiSpread then
-					local NewDirection = CalculateAntiSpread(Weapon, Command, Direction)
-
-					if Variables.AntiRecoil then
-						NewDirection = NewDirection - CalculateAntiRecoil(Weapon)
-					end
-
-					Command:SetViewAngles(NewDirection)
+				if Variables.AntiRecoil then
+					Direction = Direction - CalculateAntiRecoil(Weapon)
 				end
+
+				if not Variables.Silent then
+					Cache.FacingAngle = Direction
+				end
+
+				if Variables.AntiSpread then
+					Direction = CalculateAntiSpread(Weapon, Command, Direction)
+				end
+
+				Command:SetViewAngles(Direction)
 			pEngine.EndPrediction()
 
 			local BacktrackAmount = IsBacktrack and (GetServerTime() - TickToTime(SimulationTick)) or 0
