@@ -1050,7 +1050,6 @@ do
 			if CurDistance > MaxDistance then return false end
 
 			if TraceOutput.Hit then
-				CurTimes = CurTimes + 1
 				LastPos = TraceOutput.HitPos
 			else
 				local OriginalEndPos = TraceData.HitPos
@@ -1062,7 +1061,6 @@ do
 				Trace.endpos = OriginalEndPos
 
 				if TraceOutput.Hit then
-					CurTimes = CurTimes + 1
 					LastPos = TraceOutput.HitPos
 				else
 					if IsTFA then
@@ -1076,6 +1074,8 @@ do
 					end
 				end
 			end
+
+			CurTimes = CurTimes + 1
 		end
 
 		return CurTimes <= MaxTimes, CurTimes
@@ -1088,15 +1088,15 @@ do
 
 	-- Adjusts for bullet spread
 	ENV.CreateFunction("CalculateAntiSpread", function(Weapon, Command, ForwardAngle)
-		if not Variables.AntiSpread then return ForwardAngle end
+		if not Variables.AntiSpread then return end
 
 		if Weapon:IsScripted() or Weapon:GetClass() == "weapon_pistol" then
 			Command:SetRandomSeed(33)
-			return ForwardAngle
+			return
 		end
 
 		local WeaponCone = Cache.WeaponData.AntiSpread.Cones[Weapon:GetClass()]
-		if not WeaponCone then return ForwardAngle end
+		if not WeaponCone then return end
 
 		if type(WeaponCone) == "function" then
 			WeaponCone = WeaponCone(Weapon, Command)
@@ -1112,10 +1112,8 @@ do
 		local Up = ForwardAngle:Up()
 
 		local SpreadVector = Forward + (X * WeaponCone.x * Right * -1) + (Y * WeaponCone.y * Up * -1)
-		local SpreadAngle = SpreadVector:Angle()
-		SpreadAngle:Normalize()
-
-		return SpreadAngle
+		ForwardAngle:Set(SpreadVector:Angle())
+		FixAngle(ForwardAngle)
 	end)
 
 	-- Moves the position into place based off the entity's movement (Nothing advanced, just some simple velocity prediction)
@@ -1726,27 +1724,15 @@ do
 				end
 
 				local Direction = (Position - Cache.LocalPlayer:EyePos()):Angle()
+
+				if Variables.AutoShoot then Command:AddKey(IN_ATTACK) end
+				if Variables.FixMovement then FixMovement(Command) end
+				if Variables.AntiRecoil then Direction:Sub(CalculateAntiRecoil(Weapon)) end
+
 				FixAngle(Direction)
 
-				if Variables.AutoShoot then
-					Command:AddKey(IN_ATTACK)
-				end
-
-				if Variables.FixMovement then
-					FixMovement(Command)
-				end
-
-				if Variables.AntiRecoil then
-					Direction = Direction - CalculateAntiRecoil(Weapon)
-				end
-
-				if not Variables.Silent then
-					Cache.FacingAngle = Direction
-				end
-
-				if Variables.AntiSpread then
-					Direction = CalculateAntiSpread(Weapon, Command, Direction)
-				end
+				if not Variables.Silent then Cache.FacingAngle = Angle(Direction) end
+				if Variables.AntiSpread then CalculateAntiSpread(Weapon, Command, Direction) end
 
 				Command:SetViewAngles(Direction)
 			pEngine.EndPrediction()
@@ -1758,12 +1744,12 @@ do
 		end
 
 		if Command:KeyDown(IN_ATTACK) then
-			local NewForward = CalculateAntiSpread(Weapon, Command, Cache.FacingAngle)
+			local NewForward = Angle(Cache.FacingAngle)
+			CalculateAntiSpread(Weapon, Command, NewForward)
 
-			if Variables.AntiRecoil then
-				NewForward = NewForward - CalculateAntiRecoil(Weapon)
-			end
+			if Variables.AntiRecoil then NewForward:Sub(CalculateAntiRecoil(Weapon)) end
 
+			FixAngle(NewForward)
 			Command:SetViewAngles(NewForward)
 		end
 	end)
