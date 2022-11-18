@@ -20,9 +20,8 @@ local Data = {
 		_G = _G or getfenv(1),
 		_R = proxi._R or debug.getregistry(),
 
-		-- We destroy the globals
-		proxi = proxi,
-		CUniformRandomStream = CUniformRandomStream,
+		proxi = proxi, -- This global gets destroyed
+		CUniformRandomStream = CUniformRandomStream, -- This doesn't get destroyed because I'm too lazy to make a simple change so it stays
 
 		Variables = {
 			Enabled = true,
@@ -1867,6 +1866,5 @@ do
 	-- Restore everything (Quite redundant but why not)
 	AddHook("ShutDown", function()
 		_G.proxi = proxi
-		_G.CUniformRandomStream = CUniformRandomStream
 	end)
 end
