@@ -140,7 +140,8 @@ local Data = {
 				AntiSpread = {
 					Cones = {},
 					Seeds = {},
-					Storage = {}
+					Storage = {},
+					BaseFunctions = {}
 				},
 
 				AutoShoot = {
@@ -261,6 +262,7 @@ do
 	ENV.Localize("HITGROUP_HEAD")
 	ENV.Localize("HITGROUP_STOMACH")
 	ENV.Localize("IN_ATTACK")
+	ENV.Localize("IN_ATTACK2")
 	ENV.Localize("IN_RELOAD")
 	ENV.Localize("IN_SPEED")
 	ENV.Localize("IN_USE")
@@ -1106,6 +1108,10 @@ do
 			WeaponCone = WeaponCone(Weapon, Command)
 		end
 
+		if Cache.WeaponData.AntiSpread.BaseFunctions[GetWeaponBase(Weapon)] then
+			Cache.WeaponData.AntiSpread.BaseFunctions[GetWeaponBase(Weapon)](Weapon, Command, WeaponCone)
+		end
+
 		local Seed = Command:GetRandomSeed()
 
 		local X = Cache.WeaponData.AntiSpread.Seeds[Seed].X
@@ -1121,9 +1127,9 @@ do
 	end)
 
 	-- Moves the position into place based off the entity's movement (Nothing advanced, just some simple velocity prediction)
-	ENV.CreateFunction("PredictPosition", function(Position, Entity)
+	ENV.CreateFunction("PredictTargetPosition", function(Position, Entity)
 		local Velocity = Entity:GetAbsVelocity()
-		if Velocity:IsZero() then return Position end
+		if Velocity:IsZero() then return end
 
 		Velocity:Mul(RealFrameTime()) -- This isn't a pointer it's a newly created vector so it's fine to do this
 		Position:Add(Velocity)
@@ -1387,25 +1393,35 @@ do
 
 	ENV.Log("Setting up AntiSpread functions")
 
+	Cache.WeaponData.AntiSpread.BaseFunctions.bobs = ENV.RegisterFunction(function(Weapon, Command, WeaponCone) -- Bob is a simple man
+		if Weapon:GetIronsights() or Command:KeyDown(IN_ATTACK2) then
+			WeaponCone.x = Weapon.Primary.IronAccuracy
+			WeaponCone.y = Weapon.Primary.IronAccuracy
+		else
+			WeaponCone.x = Weapon.Primary.Spread
+			WeaponCone.y = Weapon.Primary.Spread
+		end
+	end)
+
 	Cache.WeaponData.AntiSpread.Storage.weapon_glock_hl1_attack = ENV.Vector(0.1, 0.1, 0.1)
 	Cache.WeaponData.AntiSpread.Storage.weapon_glock_hl1_neutral = ENV.Vector(0.01, 0.01, 0.01)
-	Cache.WeaponData.AntiSpread.Cones.weapon_glock_hl1 = function(Weapon, Command)
+	Cache.WeaponData.AntiSpread.Cones.weapon_glock_hl1 = ENV.RegisterFunction(function(Weapon, Command)
 		if Command:KeyDown(IN_ATTACK) then
 			return Cache.WeaponData.AntiSpread.Storage.weapon_glock_hl1_attack
 		else
 			return Cache.WeaponData.AntiSpread.Storage.weapon_glock_hl1_neutral
 		end
-	end
+	end)
 
 	Cache.WeaponData.AntiSpread.Storage.weapon_shotgun_hl1_attack = ENV.Vector(0.17432, 0.04358)
 	Cache.WeaponData.AntiSpread.Storage.weapon_shotgun_hl1_neutral = ENV.Vector(0.08716, 0.04358)
-	Cache.WeaponData.AntiSpread.Cones.weapon_shotgun_hl1 = function(Weapon, Command)
+	Cache.WeaponData.AntiSpread.Cones.weapon_shotgun_hl1 = ENV.RegisterFunction(function(Weapon, Command)
 		if Command:KeyDown(IN_ATTACK) then
 			return Cache.WeaponData.AntiSpread.Storage.weapon_shotgun_hl1_attack
 		else
 			return Cache.WeaponData.AntiSpread.Storage.weapon_shotgun_hl1_neutral
 		end
-	end
+	end)
 
 	ENV.Log("Setting up menu")
 
@@ -1721,7 +1737,19 @@ do
 
 		local KeyDown = Variables.Key.Enabled and input.IsButtonDown(Variables.Key.Code) or not Variables.Key.Enabled
 
-		if KeyDown and WeaponCanShoot(Weapon) then
+		if (KeyDown or Command:KeyDown(IN_ATTACK)) and WeaponCanShoot(Weapon) then
+			if not KeyDown then -- Standalone
+				local NewForward = Angle(Cache.FacingAngle)
+				CalculateAntiSpread(Weapon, Command, NewForward)
+
+				if Variables.AntiRecoil then NewForward:Sub(CalculateAntiRecoil(Weapon)) end
+
+				FixAngle(NewForward)
+				Command:SetViewAngles(NewForward)
+
+				return
+			end
+
 			local Target, Hitboxes, Penetrations, IsBacktrack, SimulationTick = GetAimbotTarget()
 			if not IsValid(Target) then return end
 
@@ -1737,9 +1765,9 @@ do
 			pEngine.StartPrediction(Command)
 				if IsBacktrack then
 					Command:SetTickCount(SimulationTick)
-				else
-					PredictPosition(Position, Target)
 				end
+
+				PredictTargetPosition(Position, Target, IsBacktrack)
 
 				local Direction = (Position - Cache.LocalPlayer:EyePos()):Angle()
 
@@ -1760,16 +1788,6 @@ do
 			Cache.AimbotData.Active = false
 			Cache.AimbotData.Target = NULL
 			Cache.AimbotData.Wait = false
-		end
-
-		if Command:KeyDown(IN_ATTACK) then
-			local NewForward = Angle(Cache.FacingAngle)
-			CalculateAntiSpread(Weapon, Command, NewForward)
-
-			if Variables.AntiRecoil then NewForward:Sub(CalculateAntiRecoil(Weapon)) end
-
-			FixAngle(NewForward)
-			Command:SetViewAngles(NewForward)
 		end
 	end)
 
