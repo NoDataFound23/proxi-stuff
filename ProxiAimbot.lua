@@ -74,7 +74,11 @@ local Data = {
 			FacingAngle = nil,
 
 			AimbotData = {
-				Active = false,
+				Active = false, -- Used for logging
+				Hitgroup = 0,
+				Penetrations = 0,
+				BacktrackAmount = 0,
+				Wait = false,
 				Target = NULL,
 
 				ScanOrder = {
@@ -268,6 +272,7 @@ do
 	ENV.Localize("Angle")
 	ENV.Localize("Color")
 	ENV.Localize("CurTime")
+	ENV.Localize("IsFirstTimePredicted")
 	ENV.Localize("IsValid")
 	ENV.Localize("LocalPlayer")
 	ENV.Localize("MsgC")
@@ -1120,7 +1125,8 @@ do
 		local Velocity = Entity:GetAbsVelocity()
 		if Velocity:IsZero() then return Position end
 
-		Position:Set(Position + (Velocity * RealFrameTime()))
+		Velocity:Mul(RealFrameTime()) -- This isn't a pointer it's a newly created vector so it's fine to do this
+		Position:Add(Velocity)
 	end)
 
 	--------------------------- Setup Stuff ---------------------------
@@ -1660,6 +1666,13 @@ do
 	-- Grab spread cones
 	AddHook("EntityFireBullets", function(Entity, Data)
 		if Entity ~= Cache.LocalPlayer then return end
+		if not IsFirstTimePredicted() then return end -- Retarded hook
+
+		if Cache.AimbotData.Active and not Cache.AimbotData.Wait then
+			-- Yeah it's a big line of text is there a problem?
+			Log("Fired bullet towards '{Grey}", IsValid(Cache.AimbotData.Target) and Cache.AimbotData.Target:GetName() or "??UNKNOWN_PLAYER??", "{$Reset}' {Grey}({$Reset}Hitgroup: {Green}", Cache.AimbotData.Hitgroup, "{$Reset} {Grey}({Green}", Cache.HitgroupLookups[Cache.AimbotData.Hitgroup], "{Grey}) {$Reset}| Penetrations: {Green}", Cache.AimbotData.Penetrations, "{$Reset} | Backtrack Amount: ", Cache.AimbotData.BacktrackAmount == 0 and "{Red}" or (Cache.AimbotData.BacktrackAmount > Variables.Backtrack.Amount and "{Orange}" or "{Green}"), Cache.AimbotData.BacktrackAmount, " {$Reset}ms{Grey})")
+			Cache.AimbotData.Wait = true -- Stop spam
+		end
 
 		local Weapon = Entity:GetActiveWeapon()
 		if not Weapon:IsValid() then return end
@@ -1701,10 +1714,10 @@ do
 
 	-- Run the aimbot
 	AddHook("CreateMoveEx", function(Command)
-		if not Variables.Enabled then return end
+		if not Variables.Enabled then Cache.AimbotData.Wait = false return end
 
 		local Weapon = Cache.LocalPlayer:GetActiveWeapon()
-		if not Weapon:IsValid() then return end
+		if not Weapon:IsValid() then Cache.AimbotData.Wait = false return end
 
 		local KeyDown = Variables.Key.Enabled and input.IsButtonDown(Variables.Key.Code) or not Variables.Key.Enabled
 
@@ -1714,6 +1727,12 @@ do
 
 			local Position, Hitgroup = GetAimbotPosition(Target, Hitboxes, IsBacktrack)
 			if not Position then return end
+
+			Cache.AimbotData.Active = true
+			Cache.AimbotData.Target = Target
+			Cache.AimbotData.Hitgroup = Hitgroup
+			Cache.AimbotData.Penetrations = Penetrations
+			Cache.AimbotData.BacktrackAmount = IsBacktrack and (GetServerTime() - TickToTime(SimulationTick)) or 0
 
 			pEngine.StartPrediction(Command)
 				if IsBacktrack then
@@ -1736,10 +1755,11 @@ do
 				Command:SetViewAngles(Direction)
 			pEngine.EndPrediction()
 
-			local BacktrackAmount = IsBacktrack and (GetServerTime() - TickToTime(SimulationTick)) or 0
-			Log("Fired bullet towards '{Grey}", Target:GetName(), "{$Reset}' {Grey}({$Reset}Hitgroup: {Green}", Hitgroup, "{$Reset} {Grey}({Green}", Cache.HitgroupLookups[Hitgroup], "{Grey}) {$Reset}| Penetrations: {Green}", Penetrations, "{$Reset} | Backtrack Amount: ", BacktrackAmount == 0 and "{Red}" or (BacktrackAmount > Variables.Backtrack.Amount and "{Orange}" or "{Green}"), BacktrackAmount, " {$Reset}ms{Grey})")
-
 			return
+		else
+			Cache.AimbotData.Active = false
+			Cache.AimbotData.Target = NULL
+			Cache.AimbotData.Wait = false
 		end
 
 		if Command:KeyDown(IN_ATTACK) then
