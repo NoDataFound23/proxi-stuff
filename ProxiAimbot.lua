@@ -1100,7 +1100,7 @@ do
 	ENV.CreateFunction("CalculateAntiSpread", function(Weapon, Command, ForwardAngle)
 		if not Variables.AntiSpread then return end
 
-		if Weapon:IsScripted() or Weapon:GetClass() == "weapon_pistol" then
+		if Weapon:GetClass() == "weapon_pistol" then
 			Command:SetRandomSeed(33)
 			return
 		end
