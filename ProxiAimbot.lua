@@ -830,10 +830,13 @@ do
 
 				for i = 1, #CurrentHitboxes[Hitgroup] do
 					local CurrentPosition = CurrentHitboxes[Hitgroup][i]
+
+					local pInFOV, pDistance = InFOV(CurrentPosition)
+					if not pInFOV then continue end
+
 					local Valid, Penetrations = IsVisible(CurrentPosition, Player)
 
 					if Valid then
-						local pInFOV, pDistance = InFOV(CurrentPosition)
 						CurrentHasPointInFOV = pInFOV
 						CurrentDistance = pDistance
 
@@ -1435,6 +1438,7 @@ do
 	Main:SetTitle("proxi Aimbot")
 	Main:SetVisible(false)
 	Main:SetDeleteOnClose(false)
+	Main:SetSkin("Default")
 
 	Cache.Menu = Main
 
@@ -1452,6 +1456,7 @@ do
 		local Checkbox = vgui.Create("DCheckBoxLabel", self._Container)
 		Checkbox:SetTextColor(Cache.Colors.Black)
 		Checkbox:SetText(Label)
+		Checkbox:SetSkin("Default")
 
 		Checkbox._Table = Table
 		Checkbox._Key = Key
@@ -1475,6 +1480,7 @@ do
 		Slider:SetMinMax(Min, Max)
 		Slider:SetDecimals(Decimals)
 		Slider:SetWide(self:GetWide() - (Indent * 25) - 15)
+		Slider:SetSkin("Default")
 
 		Slider._Table = Table
 		Slider._Key = Key
@@ -1512,6 +1518,7 @@ do
 		local Binder = vgui.Create("DBinder", self._Container)
 		Binder:SetValue(Table[Key])
 		Binder:SetTall(15)
+		Binder:SetSkin("Default")
 
 		Binder._Table = Table
 		Binder._Key = Key
@@ -1551,6 +1558,7 @@ do
 			Mixer:SetPalette(false)
 			Mixer:SetWangs(false)
 			Mixer:SetColor(self._Table[self._Key])
+			Mixer:SetSkin("Default")
 
 			Mixer._Table = self._Table
 			Mixer._Key = self._Key
@@ -1810,7 +1818,7 @@ do
 		-- Create new points
 		for i = 1, #Cache.PlayerList do
 			local Player = Cache.PlayerList[i]
-			if not IsPlayerTargetable(Player) then continue end
+			if not IsValid(Player) or not IsPlayerTargetable(Player) then continue end
 
 			if not Cache.BacktrackData[Player] then
 				Cache.BacktrackData[Player] = {}
@@ -1832,6 +1840,8 @@ do
 
 		for i = 1, #Cache.PlayerList do
 			local Player = Cache.PlayerList[i]
+			if not IsValid(Player) then continue end
+
 			local BacktrackData = Cache.BacktrackData[Player]
 			if not BacktrackData then continue end
 
