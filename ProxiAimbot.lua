@@ -11,8 +11,12 @@
 
 pcall(require, "proxi")
 if not proxi then return end -- Noob
+
 pcall(require, "CUniformRandomStream") -- omg exposed global detected detected detected detected detecteddetected
-if not CUniformRandomStream then return end
+if not CUniformRandomStream and file.Exists("lua/includes/modules/CUniformRandomStream.lua", "GAME") then -- Why does this have to be like this Interstate why why this is why we can't have nice things
+	pcall(RunString, file.Read("lua/includes/modules/CUniformRandomStream.lua", "GAME"))
+end
+if not CUniformRandomStream then return end -- Just in case
 
 local Data = {
 	Environment = { -- Is this overkill for just a simple aimbot? Yes. Very much so :)
