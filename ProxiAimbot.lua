@@ -1704,7 +1704,7 @@ do
 		end
 
 		Angles:Set(Cache.FacingAngle)
-		if not Variables.AntiRecoil then
+		if not Variables.Enabled or not Variables.AntiRecoil then
 			Angles:Add(Player:GetViewPunchAngles()) -- Modify it directly through reference rather than returning
 		end
 
