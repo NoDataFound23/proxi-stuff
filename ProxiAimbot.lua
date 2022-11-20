@@ -1135,6 +1135,50 @@ do
 		Position:Add(Velocity)
 	end)
 
+	-- Creates new backtrack points
+	ENV.CreateFunction("BacktrackCreate", function()
+		for i = 1, #Cache.PlayerList do
+			local Player = Cache.PlayerList[i]
+			if not IsValid(Player) or not IsPlayerTargetable(Player) then continue end
+
+			if not Cache.BacktrackData[Player] then
+				Cache.BacktrackData[Player] = {}
+				Log("Created backtrack table for '{Grey}", Player:GetName(), "{$Reset}'")
+			end
+
+			local SimulationTime = GetEntitySimulationTime(Player)
+
+			Cache.BacktrackData[Player][#Cache.BacktrackData[Player] + 1] = {
+				Player = Player,
+				Hitboxes = GetEntityHitboxes(Player),
+				SimulationTime = SimulationTime,
+				SimulationTick = TimeToTick(SimulationTime)
+			}
+		end
+	end)
+
+	-- Removes old/invalid backtrack points
+	ENV.CreateFunction("BacktrackRemove", function()
+		local CurTime = GetServerTime()
+
+		for i = 1, #Cache.PlayerList do
+			local Player = Cache.PlayerList[i]
+			if not IsValid(Player) then continue end
+
+			local BacktrackData = Cache.BacktrackData[Player]
+			if not BacktrackData then continue end
+
+			for BacktrackIndex = #BacktrackData, 1, -1 do
+				if CurTime - BacktrackData[BacktrackIndex].SimulationTime > Variables.Backtrack.Amount then
+					table.remove(BacktrackData, BacktrackIndex)
+					continue
+				end
+			end
+		end
+
+		collectgarbage("step") -- :)
+	end)
+
 	--------------------------- Setup Stuff ---------------------------
 
 	local Cache = ENV.Cache
@@ -1755,6 +1799,10 @@ do
 				return
 			end
 
+			if Variables.Backtrack.Enabled then
+				BacktrackRemove()
+			end
+
 			local Target, Hitboxes, Penetrations, IsBacktrack, SimulationTick = GetAimbotTarget()
 			if not IsValid(Target) then return end
 
@@ -1808,46 +1856,8 @@ do
 
 		if Stage ~= FRAME_NET_UPDATE_END then return end
 
-		-- Create new points
-		for i = 1, #Cache.PlayerList do
-			local Player = Cache.PlayerList[i]
-			if not IsValid(Player) or not IsPlayerTargetable(Player) then continue end
-
-			if not Cache.BacktrackData[Player] then
-				Cache.BacktrackData[Player] = {}
-				Log("Created backtrack table for '{Grey}", Player:GetName(), "{$Reset}'")
-			end
-
-			local SimulationTime = GetEntitySimulationTime(Player)
-
-			Cache.BacktrackData[Player][#Cache.BacktrackData[Player] + 1] = {
-				Player = Player,
-				Hitboxes = GetEntityHitboxes(Player),
-				SimulationTime = SimulationTime,
-				SimulationTick = TimeToTick(SimulationTime)
-			}
-		end
-
-		-- Remove invalid points
-		local CurTime = GetServerTime()
-
-		for i = 1, #Cache.PlayerList do
-			local Player = Cache.PlayerList[i]
-			if not IsValid(Player) then continue end
-
-			local BacktrackData = Cache.BacktrackData[Player]
-			if not BacktrackData then continue end
-
-			for BacktrackIndex = #BacktrackData, 1, -1 do
-				if CurTime - BacktrackData[BacktrackIndex].SimulationTime > Variables.Backtrack.Amount then
-					table.remove(BacktrackData, BacktrackIndex)
-					continue
-				end
-			end
-		end
-
-		-- :)
-		collectgarbage("step")
+		BacktrackCreate()
+		BacktrackRemove()
 	end)
 
 	-- Draw the FOV circle
@@ -1855,7 +1865,7 @@ do
 		if not Variables.Enabled then return end
 
 		local Radius = math.floor(GetFOVRadius()) -- Floor to avoid decimal jank (Screenspace is integer only so it doesn't matter)
-		if Radius <= 0 then return end -- FOV is too big to render
+		if Radius <= 0 or Radius > Cache.ScreenData.Height then return end -- FOV is too big to render
 
 		if Variables.FOV.Visible.Fill then
 			if not Cache.Polygons[Radius] then -- Generate a new poly for this radius
