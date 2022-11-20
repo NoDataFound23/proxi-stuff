@@ -489,11 +489,9 @@ do
 			end
 		end
 
-		do -- Godmode
-			if Player:HasGodMode() then return false end
-
-			for i = 1, #Cache.NetMessages.God do
-				if tobool(Player:GetNWBool(Cache.NetMessages.God[i])) then
+		do -- Protected
+			for i = 1, #Cache.NetMessages.Protected do
+				if tobool(Player:GetNWBool(Cache.NetMessages.Protected[i])) then
 					return false
 				end
 			end
@@ -506,18 +504,18 @@ do
 			for i = 1, #Cache.NetMessages.HVH do
 				if LocalHVH and PlayerHVH then break end
 
-				local v = Cache.NetMessages.HVH[i]
-
-				LocalHVH = tobool(Cache.LocalPlayer:GetNWBool(v, false))
-				PlayerHvH = tobool(Player:GetNWBool(v, false))
+				LocalHVH = tobool(Cache.LocalPlayer:GetNWBool(Cache.NetMessages.HVH[i], false))
+				PlayerHVH = tobool(Player:GetNWBool(Cache.NetMessages.HVH[i], false))
 			end
 
 			if LocalHVH ~= PlayerHVH then return false end
 		end
 
-		do -- Protected
-			for i = 1, #Cache.NetMessages.Protected do
-				if tobool(Player:GetNWBool(Cache.NetMessages.Protected[i])) then
+		do -- Godmode
+			if Player:HasGodMode() then return false end
+
+			for i = 1, #Cache.NetMessages.God do
+				if tobool(Player:GetNWBool(Cache.NetMessages.God[i])) then
 					return false
 				end
 			end
