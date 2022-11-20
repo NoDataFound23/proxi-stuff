@@ -12,11 +12,10 @@
 pcall(require, "proxi")
 if not proxi then return end -- Noob
 
-pcall(require, "CUniformRandomStream") -- omg exposed global detected detected detected detected detecteddetected
 if not CUniformRandomStream and file.Exists("lua/includes/modules/CUniformRandomStream.lua", "GAME") then -- Why does this have to be like this Interstate why why this is why we can't have nice things
 	pcall(RunString, file.Read("lua/includes/modules/CUniformRandomStream.lua", "GAME"))
 end
-if not CUniformRandomStream then return end -- Just in case
+if not CUniformRandomStream then return end -- Epic fail
 
 local Data = {
 	Environment = { -- Is this overkill for just a simple aimbot? Yes. Very much so :)
@@ -189,12 +188,7 @@ local Data = {
 		FRAME_NET_UPDATE_END = proxi.FRAME_NET_UPDATE_END or 5,
 
 		GetConVar = proxi.GetConVar,
-		GetNetVar = proxi.__Ent_GetNetVar,
-
-		pEngine = {
-			StartPrediction = proxi.StartPrediction,
-			EndPrediction = proxi.EndPrediction
-		}
+		GetNetVar = proxi.__Ent_GetNetVar
 	}
 }
 
@@ -642,7 +636,6 @@ do
 			end
 
 			local Hit, Penetrations = WeaponCanPenetrate(Weapon, Cache.TraceOutput, Entity, Position)
-
 			Hit = Hit or false
 			Penetrations = Penetrations or 0
 
@@ -1401,7 +1394,7 @@ do
 	ENV.Log("Setting up AntiSpread functions")
 
 	Cache.WeaponData.AntiSpread.BaseFunctions.bobs = ENV.RegisterFunction(function(Weapon, Command, WeaponCone) -- Bob is a simple man
-		if Weapon:GetIronsights() or Command:KeyDown(IN_ATTACK2) then
+		if Weapon:GetNWBool("M9K_Ironsights") or Command:KeyDown(IN_ATTACK2) then -- GetIronsights causes problems on some servers (Fuck you LBG) so do it manually
 			WeaponCone.x = Weapon.Primary.IronAccuracy
 			WeaponCone.y = Weapon.Primary.IronAccuracy
 		else
@@ -1774,12 +1767,12 @@ do
 			Cache.AimbotData.Penetrations = Penetrations
 			Cache.AimbotData.BacktrackAmount = IsBacktrack and (GetServerTime() - TickToTime(SimulationTick)) or 0
 
-			pEngine.StartPrediction(Command)
+			proxi.StartPrediction(Command)
 				if IsBacktrack then
 					Command:SetTickCount(SimulationTick)
+				else
+					PredictTargetPosition(Position, Target, IsBacktrack)
 				end
-
-				PredictTargetPosition(Position, Target, IsBacktrack)
 
 				local Direction = (Position - Cache.LocalPlayer:EyePos()):Angle()
 
@@ -1793,7 +1786,7 @@ do
 				if Variables.AntiSpread then CalculateAntiSpread(Weapon, Command, Direction) end
 
 				Command:SetViewAngles(Direction)
-			pEngine.EndPrediction()
+			proxi.EndPrediction()
 
 			return
 		else
