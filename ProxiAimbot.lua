@@ -1760,10 +1760,13 @@ do
 
 	-- Sets up facing angle
 	AddHook("InputMouseApply", function(Command, MouseX, MouseY)
+		if Cache.LocalPlayer:IsFrozen() then return end -- Stuck
+
 		local Weapon = Cache.LocalPlayer:GetActiveWeapon()
 
-		if IsValid(Weapon) and Weapon.FreezeMovement and Weapon:FreezeMovement() then
-			return
+		if IsValid(Weapon)  then
+			if Weapon.FreezeMovement and Weapon:FreezeMovement() then return end -- GMod camera + whatever else may freeze rotation
+			if Weapon:GetClass() == "weapon_physgun" and IsValid(Weapon:GetInternalVariable("m_hGrabbedEntity")) and (Command:KeyDown(IN_USE) or Cache.LocalPlayer:KeyDown(IN_USE)) then return end -- Physgun rotating (CUserCmd:KeyDown is jank in this hook)
 		end
 
 		Cache.FacingAngle.pitch = Cache.FacingAngle.pitch + (MouseY * Cache.ConVars.m_pitch:GetFloat())
