@@ -359,13 +359,13 @@ do
 	-- Logs something with some super duper fancy formatting (I probably overdid this, oh well)
 	ENV.CreateFunction("Log", function(...)
 		local Arguments = {
-			Cache.Colors.Grey,
+			Cache.Colors.Gray,
 			"[",
 			Cache.Colors.Lavender,
 			"Proxi",
 			Cache.Colors.Purple,
 			"Aimbot",
-			Cache.Colors.Grey,
+			Cache.Colors.Gray,
 			"] ",
 			Cache.Colors.Teal
 		}
@@ -1143,7 +1143,7 @@ do
 
 			if not Cache.BacktrackData[Player] then
 				Cache.BacktrackData[Player] = {}
-				Log("Created backtrack table for '{Grey}", Player:GetName(), "{$Reset}'")
+				Log("Created backtrack table for '{Gray}", Player:GetName(), "{$Reset}'")
 			end
 
 			local SimulationTime = GetEntitySimulationTime(Player)
@@ -1189,7 +1189,7 @@ do
 	Cache.Colors.Red = ENV.Color(255, 0, 0, 255)
 	Cache.Colors.Green = ENV.Color(0, 255, 0, 255)
 	Cache.Colors.Orange = ENV.Color(255, 150, 0, 255)
-	Cache.Colors.Grey = ENV.Color(175, 175, 175)
+	Cache.Colors.Gray = ENV.Color(175, 175, 175)
 	Cache.Colors.Lavender = ENV.Color(165, 125, 255, 255)
 	Cache.Colors.Purple = ENV.Color(125, 0, 255, 255)
 	Cache.Colors.Teal = ENV.Color(0, 180, 180)
@@ -1431,7 +1431,7 @@ do
 				Z = Z
 			 }
 
-			--ENV.Log("AntiSpread seed '{Grey}", Seed, "{$Reset}' is at {Grey}X{$Reset}: {Grey}", X, " Y{$Reset}: {Grey}", Y, " Z{$Reset}: {Grey}", Z)
+			--ENV.Log("AntiSpread seed '{Gray}", Seed, "{$Reset}' is at {Gray}X{$Reset}: {Gray}", X, " Y{$Reset}: {Gray}", Y, " Z{$Reset}: {Gray}", Z)
 		end
 	end
 
@@ -1735,7 +1735,7 @@ do
 
 		if Cache.AimbotData.Active and not Cache.AimbotData.Wait then
 			-- Yeah it's a big line of text is there a problem?
-			Log("Fired bullet towards '{Grey}", IsValid(Cache.AimbotData.Target) and Cache.AimbotData.Target:GetName() or "??UNKNOWN_PLAYER??", "{$Reset}' {Grey}({$Reset}Hitgroup: {Green}", Cache.AimbotData.Hitgroup, "{$Reset} {Grey}({Green}", Cache.HitgroupLookups[Cache.AimbotData.Hitgroup], "{Grey}) {$Reset}| Penetrations: {Green}", Cache.AimbotData.Penetrations, "{$Reset} | Backtrack Amount: ", Cache.AimbotData.BacktrackAmount == 0 and "{Red}" or (Cache.AimbotData.BacktrackAmount > Variables.Backtrack.Amount and "{Orange}" or "{Green}"), Cache.AimbotData.BacktrackAmount, " {$Reset}ms{Grey})")
+			Log("Fired bullet towards '{Gray}", IsValid(Cache.AimbotData.Target) and Cache.AimbotData.Target:GetName() or "??UNKNOWN_PLAYER??", "{$Reset}' {Gray}({$Reset}Hitgroup: {Green}", Cache.AimbotData.Hitgroup, "{$Reset} {Gray}({Green}", Cache.HitgroupLookups[Cache.AimbotData.Hitgroup], "{Gray}) {$Reset}| Penetrations: {Green}", Cache.AimbotData.Penetrations, "{$Reset} | Backtrack Amount: ", Cache.AimbotData.BacktrackAmount == 0 and "{Red}" or (Cache.AimbotData.BacktrackAmount > Variables.Backtrack.Amount and "{Orange}" or "{Green}"), Cache.AimbotData.BacktrackAmount, " {$Reset}ms{Gray})")
 			Cache.AimbotData.Wait = true -- Stop spam
 		end
 
@@ -1915,7 +1915,7 @@ do
 
 		local NewHealth = Data.health -- 8 bit unsigned, real hp is 32 bit signed. Thanks Garry :) (>255 = Jank)
 
-		Log("Damaged '{Grey}", Victim:GetName(), "{$Reset}' for {Red}", Victim:Health() - NewHealth, " {Grey}({Green}", Victim:Health(), " {Grey}-> {Green}", NewHealth, "{Grey})")
+		Log("Damaged '{Gray}", Victim:GetName(), "{$Reset}' for {Red}", Victim:Health() - NewHealth, " {Gray}({Green}", Victim:Health(), " {Gray}-> {Green}", NewHealth, "{Gray})")
 	end)
 
 	-- Restore everything (Quite redundant but why not)
