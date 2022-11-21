@@ -298,7 +298,6 @@ do
 	ENV.Localize("file", "Open")
 	ENV.Localize("game", "GetAmmoName")
 	ENV.Localize("game", "GetWorld")
-	ENV.Localize("gameevent", "Listen")
 	ENV.Localize("hook", "Add")
 	ENV.Localize("hook", "Run")
 	ENV.Localize("input", "IsButtonDown")
@@ -340,6 +339,7 @@ do
 	ENV.Localize("table", "concat")
 	ENV.Localize("table", "insert")
 	ENV.Localize("table", "remove")
+	ENV.Localize("timer", "Simple")
 	ENV.Localize("util", "TraceLine")
 	ENV.Localize("vgui", "Create")
 
@@ -1167,7 +1167,9 @@ do
 			if not BacktrackData then continue end
 
 			for BacktrackIndex = #BacktrackData, 1, -1 do
-				if CurTime - BacktrackData[BacktrackIndex].SimulationTime > Variables.Backtrack.Amount then
+				local BacktrackCurTime = BacktrackData[BacktrackIndex].SimulationTime
+
+				if CurTime - BacktrackCurTime > Variables.Backtrack.Amount or BacktrackCurTime > CurTime then
 					table.remove(BacktrackData, BacktrackIndex)
 					continue
 				end
@@ -1237,6 +1239,12 @@ do
 	Cache.FacingAngle = Cache.LocalPlayer:EyeAngles()
 
 	Cache.Textures.White = ENV.surface.GetTextureID("vgui/white")
+
+	ENV.Log("'{Gray}sv_client_max_interp_ratio{$Reset}' is at {Gray}'", Cache.ConVars.sv_client_max_interp_ratio:GetFloat(), "{$Reset}'")
+	ENV.Log("'{Gray}sv_client_min_interp_ratio{$Reset}' is at {Gray}'", Cache.ConVars.sv_client_min_interp_ratio:GetFloat(), "{$Reset}'")
+	ENV.Log("'{Gray}sv_maxunlag{$Reset}' is at {Gray}'", Cache.ConVars.sv_maxunlag:GetFloat(), "{$Reset}'")
+	ENV.Log("'{Gray}sv_maxupdaterate{$Reset}' is at {Gray}'", Cache.ConVars.sv_maxupdaterate:GetInt(), "{$Reset}'")
+	ENV.Log("'{Gray}sv_minupdaterate{$Reset}' is at {Gray}'", Cache.ConVars.sv_minupdaterate:GetInt(), "{$Reset}'")
 
 	ENV.Log("Setting up AutoShoot functions")
 
@@ -1905,18 +1913,23 @@ do
 	end)
 
 	-- Damage logs
-	Data.Environment.gameevent.Listen("player_hurt")
-	AddHook("player_hurt", function(Data)
-		if not Data then return end
+	AddHook("PlayerTraceAttack", function(Victim, DamageInfo) -- player_hurt is fucked and this doesn't work for things that don't fire bullets
+		if not IsFirstTimePredicted() then return end
+		if Victim == Cache.LocalPlayer or DamageInfo:GetAttacker() ~= Cache.LocalPlayer then return end
 
-		if Player(Data.attacker) ~= Cache.LocalPlayer then return end
+		local PreHealth = Victim:Health()
 
-		local Victim = Player(Data.userid)
-		if Victim == Cache.LocalPlayer or not IsValid(Victim) then return end
+		timer.Simple(0, RegisterFunction(function() -- Stupid ass game
+			if not IsValid(Victim) then return end
 
-		local NewHealth = Data.health -- 8 bit unsigned, real hp is 32 bit signed. Thanks Garry :) (>255 = Jank)
+			local PostHealth = math.Clamp(Victim:Health(), 0, Victim:GetMaxHealth()) -- Health can go negative
+			if PreHealth == PostHealth then return end -- Faulted prediciton or player isn't hurtable
 
-		Log("Damaged '{Gray}", Victim:GetName(), "{$Reset}' for {Red}", Victim:Health() - NewHealth, " {Gray}({Green}", Victim:Health(), " {Gray}-> {Green}", NewHealth, "{Gray})")
+			local Max = math.max(PreHealth, PostHealth) -- Just in case some jank takes place
+			local Min = math.min(PreHealth, PostHealth)
+
+			Log("Damaged '{Gray}", Victim:GetName(), "{$Reset}' for {Red}", Max - Min, " {Gray}({Green}", Max, " {Gray}-> {Green}", Min, "{Gray})")
+		end))
 	end)
 
 	-- Restore everything (Quite redundant but why not)
