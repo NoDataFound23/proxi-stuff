@@ -50,7 +50,16 @@ local Data = {
 			BulletTime = true,
 			AntiSpread = true,
 			AntiRecoil = true,
-			AutoShoot = true,
+
+			AutoShoot = {
+				Enabled = true,
+
+				Slow = {
+					Enabled = false,
+					Amount = 0.3
+				}
+			},
+
 			AutoWall = true,
 
 			Backtrack = {
@@ -83,6 +92,7 @@ local Data = {
 				BacktrackAmount = 0,
 				Wait = false,
 				Target = NULL,
+				SlowShootTicks = 0,
 
 				ScanOrder = {
 					HITGROUP_HEAD,
@@ -148,7 +158,7 @@ local Data = {
 				},
 
 				AutoShoot = {
-					Functions = {},
+					BaseFunctions = {},
 
 					Classes = {
 						Blacklist = { "bomb", "c4", "climb", "fist", "gravity gun", "grenade", "hand", "ied", "knife", "physics gun", "slam", "sword", "tool gun", "vape" },
@@ -577,9 +587,9 @@ do
 		end
 
 		local Base = GetWeaponBase(Weapon)
-		local Extra = Cache.WeaponData.AutoShoot.Functions[Base] and Cache.WeaponData.AutoShoot.Functions[Base](Weapon) or true
+		local BaseCheck = Cache.WeaponData.AutoShoot.BaseFunctions[Base] and Cache.WeaponData.AutoShoot.BaseFunctions[Base](Weapon) or true
 
-		return GetServerTime() >= Weapon:GetNextPrimaryFire() and Extra
+		return GetServerTime() >= Weapon:GetNextPrimaryFire() and BaseCheck
 	end)
 
 	-- Get the distance of a point to the crosshair in screenspace
@@ -915,6 +925,7 @@ do
 
 			for i = 1, #Hitboxes[Hitgroup] do
 				local CurrentPosition = Hitboxes[Hitgroup][i]
+				if not InFOV(CurrentPosition) then continue end
 
 				if IsBacktrack then
 					local Valid, _, Fraction = IsVisible(CurrentPosition, Entity)
@@ -1195,7 +1206,7 @@ do
 	Cache.Colors.Teal = ENV.Color(0, 180, 180)
 
 	ENV.Variables.FOV.Colors.Outline = Cache.Colors.White
-	ENV.Variables.FOV.Colors.Fill = ENV.Color(255, 255, 255, 25)
+	ENV.Variables.FOV.Colors.Fill = ENV.Color(255, 255, 255, 5)
 
 	ENV.Log("Setting up Cache") -- This needs the colors
 
@@ -1246,10 +1257,11 @@ do
 	ENV.Log("'{Gray}sv_maxupdaterate{$Reset}' is at {Gray}'", Cache.ConVars.sv_maxupdaterate:GetInt(), "{$Reset}'")
 	ENV.Log("'{Gray}sv_minupdaterate{$Reset}' is at {Gray}'", Cache.ConVars.sv_minupdaterate:GetInt(), "{$Reset}'")
 
-	ENV.Log("Setting up AutoShoot functions")
-
 	-- Weapon things
-	Cache.WeaponData.AutoShoot.Functions.bobs = ENV.RegisterFunction(function(self)
+
+	ENV.Log("Setting up AutoShoot base functions")
+
+	Cache.WeaponData.AutoShoot.BaseFunctions.bobs = ENV.RegisterFunction(function(self)
 		if self:Clip1() < 1 then return false end
 		if self:GetNWBool("Reloading") then return false end
 
@@ -1261,7 +1273,7 @@ do
 		return true
 	end)
 
-	Cache.WeaponData.AutoShoot.Functions.cw = ENV.RegisterFunction(function(self)
+	Cache.WeaponData.AutoShoot.BaseFunctions.cw = ENV.RegisterFunction(function(self)
 		if self:Clip1() == 0 then return false end
 		if not self:canFireWeapon(1) or not self:canFireWeapon(2) or not self:canFireWeapon(3) then return false end
 		if self:GetOwner():KeyDown(IN_USE) and rawget(rawget(CustomizableWeaponry, "quickGrenade"), "canThrow")(self) then return false end
@@ -1272,7 +1284,7 @@ do
 		return true
 	end)
 
-	Cache.WeaponData.AutoShoot.Functions.fas2 = ENV.RegisterFunction(function(self)
+	Cache.WeaponData.AutoShoot.BaseFunctions.fas2 = ENV.RegisterFunction(function(self)
 		if self:Clip1() <= 0 then return false end
 
 		local Owner = self:GetOwner()
@@ -1291,7 +1303,7 @@ do
 		return true
 	end)
 
-	Cache.WeaponData.AutoShoot.Functions.tfa = ENV.RegisterFunction(function(self)
+	Cache.WeaponData.AutoShoot.BaseFunctions.tfa = ENV.RegisterFunction(function(self)
 		local RunResult = hook.Run("TFA_PreCanPrimaryAttack", self)
 		if RunResult ~= nil then return RunResult end
 
@@ -1306,14 +1318,14 @@ do
 		if self:GetStatL("Primary.FiresUnderwater") == false and self:GetOwner():WaterLevel() >= 3 then return false end
 
 		RunResult = hook.Run("TFA_CanPrimaryAttack", self)
-		if RunResult ~= nil then return v end
+		if RunResult ~= nil then return RunResult end
 
 		if self:CheckJammed() then return false end
 
 		return true
 	end)
 
-	Cache.WeaponData.AutoShoot.Functions.arccw = ENV.RegisterFunction(function(self)
+	Cache.WeaponData.AutoShoot.BaseFunctions.arccw = ENV.RegisterFunction(function(self)
 		if IsValid(self:GetHolster_Entity()) then return false end
 		if self:GetHolster_Time() > 0 then return false end
 		if self:GetReloading() then return false end
@@ -1476,7 +1488,7 @@ do
 	ENV.Log("Setting up menu")
 
 	local Main = vgui.Create("DFrame")
-	Main:SetSize(400, 500)
+	Main:SetSize(400, 550)
 	Main:Center()
 	Main:SetTitle("proxi Aimbot")
 	Main:SetVisible(false)
@@ -1687,7 +1699,9 @@ do
 	Main:AddCheckbox(false, 1, "Bullettime", ENV.Variables, "BulletTime")
 	Main:AddCheckbox(false, 1, "Anti Spread", ENV.Variables, "AntiSpread")
 	Main:AddCheckbox(false, 1, "Anti Recoil", ENV.Variables, "AntiRecoil")
-	Main:AddCheckbox(false, 1, "Auto Shoot", ENV.Variables, "AutoShoot")
+	Main:AddCheckbox(false, 1, "Auto Shoot", ENV.Variables.AutoShoot, "Enabled")
+	Main:AddCheckbox(false, 2, "Slow Fire", ENV.Variables.AutoShoot.Slow, "Enabled")
+	Main:AddSlider(false, 2, "Wait Time", 0, 3, 2, ENV.Variables.AutoShoot.Slow, "Amount")
 	Main:AddCheckbox(false, 1, "Auto Wall", ENV.Variables, "AutoWall")
 	Main:AddCheckbox(false, 1, "Backtrack", ENV.Variables.Backtrack, "Enabled")
 	Main:AddSlider(false, 2, "Amount", 0, 0.2, 2, ENV.Variables.Backtrack, "Amount")
@@ -1737,6 +1751,7 @@ do
 	-- Grab spread cones
 	AddHook("EntityFireBullets", function(Entity, Data)
 		if Entity ~= Cache.LocalPlayer then return end
+		Cache.AimbotData.SlowShootTicks = 0 -- Prevent jank with things like the revolver
 		if not IsFirstTimePredicted() then return end -- Retarded hook
 
 		if Cache.AimbotData.Active and not Cache.AimbotData.Wait then
@@ -1833,7 +1848,18 @@ do
 
 				local Direction = (Position - Cache.LocalPlayer:EyePos()):Angle()
 
-				if Variables.AutoShoot then Command:AddKey(IN_ATTACK) end
+				if Variables.AutoShoot.Enabled then
+					if Variables.AutoShoot.Slow.Enabled then
+						if Cache.AimbotData.SlowShootTicks >= TimeToTick(Variables.AutoShoot.Slow.Amount) then
+							Command:AddKey(IN_ATTACK)
+						else
+							Cache.AimbotData.SlowShootTicks = Cache.AimbotData.SlowShootTicks + 1
+						end
+					else
+						Command:AddKey(IN_ATTACK)
+					end
+				end
+
 				if Variables.FixMovement then FixMovement(Command) end
 				if Variables.AntiRecoil then Direction:Sub(CalculateAntiRecoil(Weapon)) end
 
@@ -1850,6 +1876,10 @@ do
 			Cache.AimbotData.Active = false
 			Cache.AimbotData.Target = NULL
 			Cache.AimbotData.Wait = false
+
+			if not KeyDown then -- Let the next trigger happen immediately
+				Cache.AimbotData.SlowShootTicks = math.huge
+			end
 		end
 	end)
 
