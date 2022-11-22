@@ -346,7 +346,6 @@ do
 	ENV.Localize("surface", "SetTexture")
 	ENV.Localize("table", "Empty")
 	ENV.Localize("table", "IsEmpty")
-	ENV.Localize("table", "concat")
 	ENV.Localize("table", "insert")
 	ENV.Localize("table", "remove")
 	ENV.Localize("timer", "Simple")
@@ -384,7 +383,9 @@ do
 		local Concat = {...}
 
 		if #Concat > 1 then
-			Message = table.concat(Concat, "")
+			for i = 1, #Concat do
+				Message = Message .. tostring(Concat[i])
+			end
 		else
 			Message = ...
 		end
@@ -428,7 +429,7 @@ do
 
 	-- Hooks something
 	ENV.CreateFunction("AddHook", function(Type, Function)
-		Log("Hooking '{Green}", Type, "{$Reset}'")
+		Log("Hooking '{Green}", Type, "{$Reset}' {Gray}({Green}", Cache.HookName, "{Gray})")
 
 		hook.Add(Type, Cache.HookName, ENV.RegisterFunction(Function))
 	end)
@@ -946,23 +947,37 @@ do
 
 	-- Fixes rotation movement
 	ENV.CreateFunction("FixMovement", function(Command)
-		local MoveVector = Vector(Command:GetForwardMove(), Command:GetSideMove(), Command:GetUpMove())
 		local CommandViewAngles = Command:GetViewAngles()
-		local Yaw = CommandViewAngles.yaw - Cache.FacingAngle.yaw - MoveVector:Angle().yaw
 
-		if (CommandViewAngles.pitch + 90) % 360 > 180 then
-			Yaw = 180 - Yaw
+		local Yaw1, Yaw2
+
+		if Cache.FacingAngle.yaw < 0 then
+			Yaw1 = Cache.FacingAngle.yaw + 360
+		else
+			Yaw1 = Cache.FacingAngle.yaw
 		end
 
-		Yaw = math.rad(((Yaw + 180) % 360) - 180)
+		if CommandViewAngles.yaw < 0 then
+			Yaw2 = CommandViewAngles.yaw + 360
+		else
+			Yaw2 = CommandViewAngles.yaw
+		end
 
-		local Speed = MoveVector:Length2D()
+		local DeltaYaw
 
-		local ForwardSpeed = Cache.ConVars.cl_forwardspeed:GetInt()
-		local SideSpeed = Cache.ConVars.cl_sidespeed:GetInt()
+		if Yaw2 < Yaw1 then
+			DeltaYaw = math.abs(Yaw2 - Yaw1)
+		else
+			DeltaYaw = 360 - math.abs(Yaw1 - Yaw2)
+		end
 
-		Command:SetForwardMove(math.Clamp(math.cos(Yaw) * Speed, -ForwardSpeed, ForwardSpeed))
-		Command:SetSideMove(math.Clamp(-math.sin(Yaw) * Speed, -SideSpeed, SideSpeed))
+		DeltaYaw = math.rad(360 - DeltaYaw)
+
+		local ForwardSpeed = Command:GetForwardMove()
+		local SideSpeed = Command:GetSideMove()
+
+		Command:SetForwardMove(math.cos(DeltaYaw) * ForwardSpeed + math.cos(DeltaYaw + 90) * SideSpeed)
+		Command:SetSideMove(math.sin(DeltaYaw) * ForwardSpeed + math.sin(DeltaYaw + 90) * SideSpeed)
 	end)
 
 	-- Gets the lowercase ammo name of the weapon
@@ -1132,7 +1147,6 @@ do
 
 		local SpreadVector = Forward + (X * WeaponCone.x * Right * -1) + (Y * WeaponCone.y * Up * -1)
 		ForwardAngle:Set(SpreadVector:Angle())
-		FixAngle(ForwardAngle)
 	end)
 
 	-- Moves the position into place based off the entity's movement (Nothing advanced, just some simple velocity prediction)
@@ -1218,11 +1232,9 @@ do
 	Cache.ScreenData.Center.Y = ENV.math.floor(Cache.ScreenData.Height / 2)
 
 	-- ConVars
-	Cache.ConVars.cl_forwardspeed = ENV.GetConVar("cl_forwardspeed")
 	Cache.ConVars.cl_interp = ENV.GetConVar("cl_interp")
 	Cache.ConVars.cl_interp_ratio = ENV.GetConVar("cl_interp_ratio")
 	Cache.ConVars.cl_interpolate = ENV.GetConVar("cl_interpolate")
-	Cache.ConVars.cl_sidespeed = ENV.GetConVar("cl_sidespeed")
 	Cache.ConVars.cl_updaterate = ENV.GetConVar("cl_updaterate")
 
 	Cache.ConVars.sv_client_max_interp_ratio = ENV.GetConVar("sv_client_max_interp_ratio")
@@ -1813,12 +1825,14 @@ do
 		if (KeyDown or Command:KeyDown(IN_ATTACK)) and WeaponCanShoot(Weapon) then
 			if not KeyDown then -- Standalone
 				local NewForward = Angle(Cache.FacingAngle)
-				CalculateAntiSpread(Weapon, Command, NewForward)
 
-				if Variables.AntiRecoil then NewForward:Sub(CalculateAntiRecoil(Weapon)) end
+				proxi.StartPrediction(Command)
+					if Variables.AntiSpread then CalculateAntiSpread(Weapon, Command, NewForward) end
+					if Variables.AntiRecoil then NewForward:Sub(LocalPlayer():GetViewPunchAngles()) end
+					FixAngle(NewForward)
 
-				FixAngle(NewForward)
-				Command:SetViewAngles(NewForward)
+					Command:SetViewAngles(NewForward)
+				proxi.EndPrediction()
 
 				return
 			end
@@ -1860,16 +1874,15 @@ do
 					end
 				end
 
-				if Variables.FixMovement then FixMovement(Command) end
-				if Variables.AntiRecoil then Direction:Sub(CalculateAntiRecoil(Weapon)) end
-
-				FixAngle(Direction)
-
 				if not Variables.Silent then Cache.FacingAngle = Angle(Direction) end
 				if Variables.AntiSpread then CalculateAntiSpread(Weapon, Command, Direction) end
+				if Variables.AntiRecoil then Direction:Sub(CalculateAntiRecoil(Weapon)) end
+				FixAngle(Direction)
 
 				Command:SetViewAngles(Direction)
 			proxi.EndPrediction()
+
+			if Variables.FixMovement then FixMovement(Command) end
 
 			return
 		else
@@ -1949,10 +1962,10 @@ do
 
 		local PreHealth = Victim:Health()
 
-		timer.Simple(0, RegisterFunction(function() -- Stupid ass game
+		timer.Simple(0.01, RegisterFunction(function() -- Stupid ass game
 			if not IsValid(Victim) then return end
 
-			local PostHealth = math.Clamp(Victim:Health(), 0, Victim:GetMaxHealth()) -- Health can go negative
+			local PostHealth = math.max(Victim:Health(), 0) -- Health can go negative
 			if PreHealth == PostHealth then return end -- Faulted prediciton or player isn't hurtable
 
 			local Max = math.max(PreHealth, PostHealth) -- Just in case some jank takes place
