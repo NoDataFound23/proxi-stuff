@@ -61,6 +61,7 @@ local Data = {
 			},
 
 			AutoWall = true,
+			AntiTaunt = false,
 
 			Backtrack = {
 				Enabled = true,
@@ -266,6 +267,7 @@ do
 	--------------------------- Normal Localization ---------------------------
 
 	-- Enums
+	ENV.Localize("GESTURE_SLOT_VCD")
 	ENV.Localize("HITGROUP_CHEST")
 	ENV.Localize("HITGROUP_HEAD")
 	ENV.Localize("HITGROUP_STOMACH")
@@ -1261,6 +1263,8 @@ do
 	Cache.LocalPlayer = ENV.LocalPlayer()
 	Cache.FacingAngle = Cache.LocalPlayer:EyeAngles()
 
+	Cache.ViewData.Angles = Cache.FacingAngle
+
 	Cache.Textures.White = ENV.surface.GetTextureID("vgui/white")
 
 	ENV.Log("'{Gray}sv_client_max_interp_ratio{$Reset}' is at {Gray}'", Cache.ConVars.sv_client_max_interp_ratio:GetFloat(), "{$Reset}'")
@@ -1500,7 +1504,7 @@ do
 	ENV.Log("Setting up menu")
 
 	local Main = vgui.Create("DFrame")
-	Main:SetSize(400, 550)
+	Main:SetSize(400, 575)
 	Main:Center()
 	Main:SetTitle("proxi Aimbot")
 	Main:SetVisible(false)
@@ -1715,6 +1719,7 @@ do
 	Main:AddCheckbox(false, 2, "Slow Fire", ENV.Variables.AutoShoot.Slow, "Enabled")
 	Main:AddSlider(false, 2, "Wait Time", 0, 3, 2, ENV.Variables.AutoShoot.Slow, "Amount")
 	Main:AddCheckbox(false, 1, "Auto Wall", ENV.Variables, "AutoWall")
+	Main:AddCheckbox(false, 1, "Anti Taunt", ENV.Variables, "AntiTaunt")
 	Main:AddCheckbox(false, 1, "Backtrack", ENV.Variables.Backtrack, "Enabled")
 	Main:AddSlider(false, 2, "Amount", 0, 0.2, 2, ENV.Variables.Backtrack, "Amount")
 	Main:AddCheckbox(false, 1, "Multi-point", ENV.Variables.MultiPoint, "Enabled")
@@ -1793,7 +1798,7 @@ do
 
 	-- Sets up facing angle
 	AddHook("InputMouseApply", function(Command, MouseX, MouseY)
-		if Cache.LocalPlayer:IsFrozen() then return end -- Stuck
+		if not Variables.Enabled or Cache.LocalPlayer:IsFrozen() then return end
 
 		local Weapon = Cache.LocalPlayer:GetActiveWeapon()
 
@@ -1810,6 +1815,10 @@ do
 
 	-- Used to fix view then CommandNumber is 0
 	AddHook("CreateMove", function(Command)
+		if not Variables.Enabled then
+			Cache.FacingAngle = Command:GetViewAngles()
+		end
+
 		Command:SetViewAngles(Cache.FacingAngle)
 	end)
 
@@ -1898,7 +1907,7 @@ do
 
 	-- Setup backtrack points
 	AddHook("PostFrameStageNotify", function(Stage)
-		if not Variables.Backtrack.Enabled then
+		if not Variables.Enabled or not Variables.Backtrack.Enabled then
 			if not table.IsEmpty(Cache.BacktrackData) then
 				table.Empty(Cache.BacktrackData)
 			end
@@ -1953,11 +1962,23 @@ do
 
 			Cache.LastPlayerListUpdate = CurTime
 		end
+
+		if Variables.AntiTaunt then
+			for i = 1, #Cache.PlayerList do
+				if not IsValid(Cache.PlayerList[i]) then continue end -- Don't make a variable to improve performance
+
+				if Cache.PlayerList[i]:IsPlayingTaunt() then
+					Cache.PlayerList[i]:AnimResetGestureSlot(GESTURE_SLOT_VCD)
+				end
+			end
+
+			Cache.LastAntiTauntUpdate = CurTime
+		end
 	end)
 
 	-- Damage logs
 	AddHook("PlayerTraceAttack", function(Victim, DamageInfo) -- player_hurt is fucked and this doesn't work for things that don't fire bullets
-		if not IsFirstTimePredicted() then return end
+		if not Variables.Enabled or not IsFirstTimePredicted() then return end
 		if Victim == Cache.LocalPlayer or DamageInfo:GetAttacker() ~= Cache.LocalPlayer then return end
 
 		local PreHealth = Victim:Health()
