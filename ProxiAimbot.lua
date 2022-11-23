@@ -76,7 +76,9 @@ local Data = {
 					[HITGROUP_CHEST] = false,
 					[HITGROUP_STOMACH] = false
 				}
-			}
+			},
+
+			DamageLogs = true
 		},
 
 		Cache = {
@@ -310,6 +312,7 @@ do
 	ENV.Localize("file", "Open")
 	ENV.Localize("game", "GetAmmoName")
 	ENV.Localize("game", "GetWorld")
+	ENV.Localize("gameevent", "Listen")
 	ENV.Localize("hook", "Add")
 	ENV.Localize("hook", "Run")
 	ENV.Localize("input", "IsButtonDown")
@@ -431,7 +434,7 @@ do
 
 	-- Hooks something
 	ENV.CreateFunction("AddHook", function(Type, Function)
-		Log("Hooking '{Green}", Type, "{$Reset}' {Gray}({Green}", Cache.HookName, "{Gray})")
+		Log("Hooking '{Green}", Type, "{$Reset}' {Gray}( {$Reset}'{Green}", Cache.HookName, "{$Reset}' {Gray})")
 
 		hook.Add(Type, Cache.HookName, ENV.RegisterFunction(Function))
 	end)
@@ -1156,7 +1159,19 @@ do
 		local Velocity = Entity:GetAbsVelocity()
 		if Velocity:IsZero() then return end
 
-		Velocity:Mul(RealFrameTime()) -- This isn't a pointer it's a newly created vector so it's fine to do this
+		local FrameTime = RealFrameTime()
+
+		Velocity:Set((Velocity * FrameTime / 25) - (Velocity * FrameTime / 66)) -- This isn't a pointer it's a newly created vector so it's fine to do this
+		Position:Add(Velocity)
+	end)
+
+	ENV.CreateFunction("PredictLocalPosition", function(Position)
+		local Velocity = Cache.LocalPlayer:GetAbsVelocity()
+		if Velocity:IsZero() then return end
+
+		local FrameTime = RealFrameTime()
+
+		Velocity:Set((Velocity * FrameTime / 25) + (Velocity * FrameTime / 66))
 		Position:Add(Velocity)
 	end)
 
@@ -1504,7 +1519,7 @@ do
 	ENV.Log("Setting up menu")
 
 	local Main = vgui.Create("DFrame")
-	Main:SetSize(400, 575)
+	Main:SetSize(400, 600)
 	Main:Center()
 	Main:SetTitle("proxi Aimbot")
 	Main:SetVisible(false)
@@ -1726,6 +1741,7 @@ do
 	Main:AddCheckbox(false, 2, "Head", ENV.Variables.MultiPoint.Hitboxes, HITGROUP_HEAD)
 	Main:AddCheckbox(false, 2, "Chest", ENV.Variables.MultiPoint.Hitboxes, HITGROUP_CHEST)
 	Main:AddCheckbox(false, 2, "Stomach", ENV.Variables.MultiPoint.Hitboxes, HITGROUP_STOMACH)
+	Main:AddCheckbox(false, 1, "Damage Logs", ENV.Variables, "DamageLogs")
 
 	Main:InvalidateLayout()
 end
@@ -1869,6 +1885,8 @@ do
 					PredictTargetPosition(Position, Target, IsBacktrack)
 				end
 
+				PredictLocalPosition(Position)
+
 				local Direction = (Position - Cache.LocalPlayer:EyePos()):Angle()
 
 				if Variables.AutoShoot.Enabled then
@@ -1977,23 +1995,16 @@ do
 	end)
 
 	-- Damage logs
-	AddHook("PlayerTraceAttack", function(Victim, DamageInfo) -- player_hurt is fucked and this doesn't work for things that don't fire bullets
-		if not Variables.Enabled or not IsFirstTimePredicted() then return end
-		if Victim == Cache.LocalPlayer or DamageInfo:GetAttacker() ~= Cache.LocalPlayer then return end
+	Data.Environment.gameevent.Listen("player_hurt")
+	AddHook("player_hurt", function(Data)
+		if not Variables.Enabled or not Variables.DamageLogs then return end
 
-		local PreHealth = Victim:Health()
+		if Player(Data.attacker) ~= Cache.LocalPlayer then return end
 
-		timer.Simple(0.01, RegisterFunction(function() -- Stupid ass game
-			if not IsValid(Victim) then return end
+		local Victim = Player(Data.userid)
+		if Victim == Cache.LocalPlayer or not IsValid(Victim) then return end
 
-			local PostHealth = math.max(Victim:Health(), 0) -- Health can go negative
-			if PreHealth == PostHealth then return end -- Faulted prediciton or player isn't hurtable
-
-			local Max = math.max(PreHealth, PostHealth) -- Just in case some jank takes place
-			local Min = math.min(PreHealth, PostHealth)
-
-			Log("Damaged '{Gray}", Victim:GetName(), "{$Reset}' for {Red}", Max - Min, " {Gray}({Green}", Max, " {Gray}-> {Green}", Min, "{Gray})")
-		end))
+		Log("Hit '{Gray}", Victim:GetName(), "{$Reset}'") -- I'd like to put the hurt amount here but this game is too jank for that
 	end)
 
 	-- Restore everything (Quite redundant but why not)
