@@ -319,6 +319,7 @@ do
 	ENV.Localize("math", "Clamp") -- So many calculations! Must be a math wiz!
 	ENV.Localize("math", "Distance")
 	ENV.Localize("math", "NormalizeAngle")
+	ENV.Localize("math", "Rand")
 	ENV.Localize("math", "Round")
 	ENV.Localize("math", "Truncate")
 	ENV.Localize("math", "abs")
@@ -333,6 +334,7 @@ do
 	ENV.Localize("math", "pi")
 	ENV.Localize("math", "pow")
 	ENV.Localize("math", "rad")
+	ENV.Localize("math", "randomseed")
 	ENV.Localize("math", "sin")
 	ENV.Localize("math", "sqrt")
 	ENV.Localize("math", "tan")
@@ -359,6 +361,7 @@ do
 
 	-- Stupid shit
 	ENV.NULL = ENV.rawget(_G, "NULL") -- BEEEEEEEEEEEEEEE
+	ENV.angle_zero = ENV.Angle(0, 0, 0)
 
 	ENV.CustomizableWeaponry = ENV.rawget(ENV._G, "CustomizableWeaponry")
 	ENV.CW_AIMING = ENV.rawget(ENV._G, "CW_AIMING")
@@ -1118,7 +1121,17 @@ do
 
 	-- Adjusts for aim punch
 	ENV.CreateFunction("CalculateAntiRecoil", function(Weapon)
-		return (Weapon:IsScripted() or Weapon:GetClass() == "weapon_pistol") and Angle(0, 0, 0) or Cache.LocalPlayer:GetViewPunchAngles()
+		if Weapon:GetClass() == "weapon_pistol" then
+			return angle_zero
+		end
+
+		if Weapon:IsScripted() then
+			if GetWeaponBase(Weapon) ~= "cw" and GetWeaponBase(Weapon) ~= "fas2" then
+				return angle_zero
+			end
+		end
+
+		return Cache.LocalPlayer:GetViewPunchAngles()
 	end)
 
 	-- Adjusts for bullet spread
@@ -1137,8 +1150,8 @@ do
 			WeaponCone = WeaponCone(Weapon, Command)
 		end
 
-		if Cache.WeaponData.AntiSpread.BaseFunctions[GetWeaponBase(Weapon)] then
-			Cache.WeaponData.AntiSpread.BaseFunctions[GetWeaponBase(Weapon)](Weapon, Command, WeaponCone)
+		if Cache.WeaponData.AntiSpread.BaseFunctions[GetWeaponBase(Weapon)] and Cache.WeaponData.AntiSpread.BaseFunctions[GetWeaponBase(Weapon)](Weapon, Command, WeaponCone, ForwardAngle) then -- TODO: Clean this up?
+			return
 		end
 
 		local Seed = Command:GetRandomSeed()
@@ -1484,7 +1497,7 @@ do
 		end
 	end
 
-	ENV.Log("Setting up AntiSpread functions")
+	ENV.Log("Setting up AntiSpread base functions")
 
 	Cache.WeaponData.AntiSpread.BaseFunctions.bobs = ENV.RegisterFunction(function(Weapon, Command, WeaponCone) -- Bob is a simple man
 		if Weapon:GetNWBool("M9K_Ironsights") or Command:KeyDown(IN_ATTACK2) then -- GetIronsights causes problems on some servers (Fuck you LBG) so do it manually
@@ -1494,7 +1507,20 @@ do
 			WeaponCone.x = Weapon.Primary.Spread
 			WeaponCone.y = Weapon.Primary.Spread
 		end
+
+		return false
 	end)
+
+	Cache.WeaponData.AntiSpread.BaseFunctions.cw = ENV.RegisterFunction(function(Weapon, Command, _, ForwardAngle)
+		local Cone = Weapon.CurCone
+
+		math.randomseed(Command:CommandNumber())
+		ForwardAngle:Add(Angle(-math.Rand(-Cone, Cone), -math.Rand(-Cone, Cone), 0) * 25)
+
+		return true
+	end)
+
+	ENV.Log("Setting up AntiSpread class functions")
 
 	Cache.WeaponData.AntiSpread.Storage.weapon_glock_hl1_attack = ENV.Vector(0.1, 0.1, 0.1)
 	Cache.WeaponData.AntiSpread.Storage.weapon_glock_hl1_neutral = ENV.Vector(0.01, 0.01, 0.01)
@@ -1853,7 +1879,7 @@ do
 
 				proxi.StartPrediction(Command)
 					if Variables.AntiSpread then CalculateAntiSpread(Weapon, Command, NewForward) end
-					if Variables.AntiRecoil then NewForward:Sub(LocalPlayer():GetViewPunchAngles()) end
+					if Variables.AntiRecoil then NewForward:Sub(CalculateAntiRecoil(Weapon)) end
 					FixAngle(NewForward)
 
 					Command:SetViewAngles(NewForward)
