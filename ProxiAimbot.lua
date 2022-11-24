@@ -45,6 +45,11 @@ local Data = {
 				Colors = {}
 			},
 
+			SnapLines = {
+				Enabled = false,
+				Color = nil -- Set later
+			},
+
 			Silent = true,
 			FixMovement = true,
 			BulletTime = true,
@@ -87,6 +92,7 @@ local Data = {
 			TickInternval = 0,
 			LocalPlayer = NULL,
 			FacingAngle = nil,
+			Clipboard = "",
 
 			AimbotData = {
 				Active = false, -- Used for logging
@@ -286,6 +292,7 @@ do
 	ENV.Localize("Angle")
 	ENV.Localize("Color")
 	ENV.Localize("CurTime")
+	ENV.Localize("DermaMenu")
 	ENV.Localize("IsFirstTimePredicted")
 	ENV.Localize("IsValid")
 	ENV.Localize("LocalPlayer")
@@ -295,6 +302,7 @@ do
 	ENV.Localize("RealFrameTime")
 	ENV.Localize("ScrH")
 	ENV.Localize("ScrW")
+	ENV.Localize("SetClipboardText")
 	ENV.Localize("SysTime")
 	ENV.Localize("Vector")
 	ENV.Localize("collectgarbage")
@@ -340,10 +348,13 @@ do
 	ENV.Localize("math", "tan")
 	ENV.Localize("player", "GetAll")
 	ENV.Localize("string", "Split")
+	ENV.Localize("string", "ToColor")
 	ENV.Localize("string", "find")
+	ENV.Localize("string", "format")
 	ENV.Localize("string", "lower")
 	ENV.Localize("string", "sub")
 	ENV.Localize("surface", "DrawCircle")
+	ENV.Localize("surface", "DrawLine")
 	ENV.Localize("surface", "DrawOutlinedRect")
 	ENV.Localize("surface", "DrawPoly")
 	ENV.Localize("surface", "DrawRect")
@@ -614,7 +625,7 @@ do
 			return math.Distance(Cache.ScreenData.Center.X, Cache.ScreenData.Center.Y, ScreenPosition.x, ScreenPosition.y), true
 		else
 			local Forward = Cache.ViewData.Angles:Forward()
-			local Direction = (Position - Cache.LocalPlayer:EyePos()):GetNormalized()
+			local Direction = (Position - Cache.ViewData.Origin):GetNormalized()
 			local Degree = math.deg(math.acos(Forward:Dot(Direction)))
 
 			return math.abs(Degree), false
@@ -1234,6 +1245,11 @@ do
 		collectgarbage("step") -- :)
 	end)
 
+	-- Convers a color into 0x00000000 form
+	ENV.CreateFunction("ColorToHex", function(Color)
+		return string.format("#%02x%02x%02x%02x", Color.r, Color.g, Color.b, Color.a)
+	end)
+
 	--------------------------- Setup Stuff ---------------------------
 
 	local Cache = ENV.Cache
@@ -1244,13 +1260,15 @@ do
 	Cache.Colors.Red = ENV.Color(255, 0, 0, 255)
 	Cache.Colors.Green = ENV.Color(0, 255, 0, 255)
 	Cache.Colors.Orange = ENV.Color(255, 150, 0, 255)
-	Cache.Colors.Gray = ENV.Color(175, 175, 175)
+	Cache.Colors.Gray = ENV.Color(175, 175, 175, 255)
 	Cache.Colors.Lavender = ENV.Color(165, 125, 255, 255)
 	Cache.Colors.Purple = ENV.Color(125, 0, 255, 255)
-	Cache.Colors.Teal = ENV.Color(0, 180, 180)
+	Cache.Colors.Teal = ENV.Color(0, 180, 180, 255)
 
 	ENV.Variables.FOV.Colors.Outline = Cache.Colors.White
 	ENV.Variables.FOV.Colors.Fill = ENV.Color(255, 255, 255, 5)
+
+	ENV.Variables.SnapLines.Color = ENV.Color(255, 255, 255, 255)
 
 	ENV.Log("Setting up Cache") -- This needs the colors
 
@@ -1545,7 +1563,7 @@ do
 	ENV.Log("Setting up menu")
 
 	local Main = vgui.Create("DFrame")
-	Main:SetSize(400, 600)
+	Main:SetSize(400, 625)
 	Main:Center()
 	Main:SetTitle("proxi Aimbot")
 	Main:SetVisible(false)
@@ -1703,6 +1721,21 @@ do
 			end)
 		end
 
+		ColorBox.DoRightClick = Data.Environment.RegisterFunction(function(self)
+			local Menu = DermaMenu() -- Could pre-bake but meh
+
+			Menu:AddOption("Copy", RegisterFunction(function(self)
+				Cache.Clipboard = tostring(self._ColorBox._Table[self._ColorBox._Key])
+				SetClipboardText(ColorToHex(self._ColorBox._Table[self._ColorBox._Key]))
+			end))._ColorBox = self -- Lets the new option reference the ColorBox
+
+			Menu:AddOption("Paste", RegisterFunction(function(self)
+				self._ColorBox._Table[self._ColorBox._Key] = string.ToColor(Cache.Clipboard)
+			end))._ColorBox = self
+
+			Menu:Open()
+		end)
+
 		ColorBox.Paint = Data.Environment.RegisterFunction(function(self, Width, Height)
 			surface.SetDrawColor(Cache.Colors.Black)
 			surface.DrawRect(0, 0, Width, Height)
@@ -1751,6 +1784,8 @@ do
 	local FirstBox = Main:AddColorBox(true, 0, ENV.Variables.FOV.Colors, "Outline")
 	Main:AddCheckbox(false, 2, "Fill", ENV.Variables.FOV.Visible, "Fill")
 	Main:AddColorBox(true, 0, ENV.Variables.FOV.Colors, "Fill")._OverrideX = FirstBox
+	Main:AddCheckbox(false, 1, "Snap Lines", ENV.Variables.SnapLines, "Enabled")
+	Main:AddColorBox(true, 0, ENV.Variables.SnapLines, "Color")._OverrideX = FirstBox
 	Main:AddCheckbox(false, 1, "Silent", ENV.Variables, "Silent")
 	Main:AddCheckbox(false, 1, "Fix Movement", ENV.Variables, "FixMovement")
 	Main:AddCheckbox(false, 1, "Bullettime", ENV.Variables, "BulletTime")
@@ -1970,21 +2005,36 @@ do
 		if not Variables.Enabled then return end
 
 		local Radius = math.floor(GetFOVRadius()) -- Floor to avoid decimal jank (Screenspace is integer only so it doesn't matter)
-		if Radius <= 0 or Radius > Cache.ScreenData.Height then return end -- FOV is too big to render
+		if Radius > 0 and Radius < Cache.ScreenData.Height then -- Don't render if FOV is too big
+			if Variables.FOV.Visible.Fill then
+				if not Cache.Polygons[Radius] then -- Generate a new poly for this radius
+					Cache.Polygons[Radius] = CreatePolygon(Cache.ScreenData.Center.X, Cache.ScreenData.Center.Y, Radius, 64)
+				end
 
-		if Variables.FOV.Visible.Fill then
-			if not Cache.Polygons[Radius] then -- Generate a new poly for this radius
-				Cache.Polygons[Radius] = CreatePolygon(Cache.ScreenData.Center.X, Cache.ScreenData.Center.Y, Radius, 64)
+				surface.SetTexture(Cache.Textures.White)
+				surface.SetDrawColor(Variables.FOV.Colors.Fill)
+				surface.DrawPoly(Cache.Polygons[Radius])
 			end
 
-			surface.SetTexture(Cache.Textures.White)
-			surface.SetDrawColor(Variables.FOV.Colors.Fill)
-			surface.DrawPoly(Cache.Polygons[Radius])
+			if Variables.FOV.Visible.Outline then
+				surface.SetDrawColor(Variables.FOV.Colors.Outline)
+				surface.DrawCircle(Cache.ScreenData.Center.X, Cache.ScreenData.Center.Y, Radius, Variables.FOV.Colors.Outline)
+			end
 		end
 
-		if Variables.FOV.Visible.Outline then
-			surface.SetDrawColor(Variables.FOV.Colors.Outline)
-			surface.DrawCircle(Cache.ScreenData.Center.X, Cache.ScreenData.Center.Y, Radius, Variables.FOV.Colors.Outline)
+		if Variables.SnapLines.Enabled then
+			local Target, Hitboxes, _, IsBacktrack = GetAimbotTarget()
+
+			if IsValid(Target) then
+				local Position = GetAimbotPosition(Target, Hitboxes, IsBacktrack)
+
+				if Position then
+					local ScreenPosition = Position:ToScreen()
+
+					surface.SetDrawColor(Variables.SnapLines.Color)
+					surface.DrawLine(Cache.ScreenData.Center.X, Cache.ScreenData.Center.Y, ScreenPosition.x, ScreenPosition.y)
+				end
+			end
 		end
 	end)
 
