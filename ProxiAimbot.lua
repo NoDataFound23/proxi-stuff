@@ -968,35 +968,12 @@ do
 	ENV.CreateFunction("FixMovement", function(Command)
 		local CommandViewAngles = Command:GetViewAngles()
 
-		local Yaw1, Yaw2
+		local MoveVector = Vector(Command:GetForwardMove(), Command:GetSideMove(), 0)
+    	local Yaw = math.rad(CommandViewAngles.yaw - Cache.FacingAngle.yaw + MoveVector:Angle().yaw)
+		local Speed = MoveVector:Length2D()
 
-		if Cache.FacingAngle.yaw < 0 then
-			Yaw1 = Cache.FacingAngle.yaw + 360
-		else
-			Yaw1 = Cache.FacingAngle.yaw
-		end
-
-		if CommandViewAngles.yaw < 0 then
-			Yaw2 = CommandViewAngles.yaw + 360
-		else
-			Yaw2 = CommandViewAngles.yaw
-		end
-
-		local DeltaYaw
-
-		if Yaw2 < Yaw1 then
-			DeltaYaw = math.abs(Yaw2 - Yaw1)
-		else
-			DeltaYaw = 360 - math.abs(Yaw1 - Yaw2)
-		end
-
-		DeltaYaw = math.rad(360 - DeltaYaw)
-
-		local ForwardSpeed = Command:GetForwardMove()
-		local SideSpeed = Command:GetSideMove()
-
-		Command:SetForwardMove(math.cos(DeltaYaw) * ForwardSpeed + math.cos(DeltaYaw + 90) * SideSpeed)
-		Command:SetSideMove(math.sin(DeltaYaw) * ForwardSpeed + math.sin(DeltaYaw + 90) * SideSpeed)
+    	Command:SetForwardMove(math.cos(Yaw) * Speed)
+    	Command:SetSideMove(math.sin(Yaw) * Speed)
 	end)
 
 	-- Gets the lowercase ammo name of the weapon
