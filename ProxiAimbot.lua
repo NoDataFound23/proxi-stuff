@@ -83,7 +83,17 @@ local Data = {
 				}
 			},
 
-			DamageLogs = true
+			DamageLogs = true,
+
+			IgnoreFlags = {
+				Spectators = true,
+				Friends = false,
+				Buildmode = true,
+				Godmode = true,
+				OpposingHVH = true,
+				Protected = true,
+				Invisible = false
+			}
 		},
 
 		Cache = {
@@ -511,7 +521,28 @@ do
 
 	-- Tests if the player should be registered as a valid target
 	ENV.CreateFunction("IsPlayerTargetable", function(Player)
-		do -- Buildmode
+		if Player == Cache.LocalPlayer or not Player:Alive() or Player:IsDormant() then return false end -- Never target these
+
+		if Variables.IgnoreFlags.Spectators then
+			if Player:Team() == TEAM_SPECTATOR or Player:GetObserverMode() ~= OBS_MODE_NONE then
+				return false
+			end
+		end
+
+		if Variables.IgnoreFlags.Friends then
+			if Player:GetFriendStatus() == "friend" then
+				return false
+			end
+		end
+
+		if Variables.IgnoreFlags.Invisible then
+			if Player:GetNoDraw() or Player:GetColor().a <= 0 then
+				return false
+			end
+		end
+
+		-- Net stuff
+		if Variables.IgnoreFlags.Buildmode then
 			for i = 1, #Cache.NetMessages.Buildmode do
 				if tobool(Player:GetNWBool(Cache.NetMessages.Buildmode[i])) then
 					return false
@@ -519,7 +550,7 @@ do
 			end
 		end
 
-		do -- Protected
+		if Variables.IgnoreFlags.Protected then
 			for i = 1, #Cache.NetMessages.Protected do
 				if tobool(Player:GetNWBool(Cache.NetMessages.Protected[i])) then
 					return false
@@ -527,7 +558,7 @@ do
 			end
 		end
 
-		do -- HVH
+		if Variables.IgnoreFlags.OpposingHVH then
 			local LocalHVH = false
 			local PlayerHVH = false
 
@@ -541,7 +572,7 @@ do
 			if LocalHVH ~= PlayerHVH then return false end
 		end
 
-		do -- Godmode
+		if Variables.IgnoreFlags.Godmode then
 			if Player:HasGodMode() then return false end
 
 			for i = 1, #Cache.NetMessages.God do
@@ -551,7 +582,7 @@ do
 			end
 		end
 
-		return Player ~= Cache.LocalPlayer and Player:Alive() and Player:Team() ~= TEAM_SPECTATOR and Player:GetObserverMode() == OBS_MODE_NONE and not Player:IsDormant()
+		return true
 	end)
 
 	-- Fixes an angle to engine view angle bounds
@@ -1540,12 +1571,13 @@ do
 	ENV.Log("Setting up menu")
 
 	local Main = vgui.Create("DFrame")
-	Main:SetSize(400, 625)
+	Main:SetSize(600, 625)
 	Main:Center()
 	Main:SetTitle("proxi Aimbot")
 	Main:SetVisible(false)
 	Main:SetDeleteOnClose(false)
 	Main:SetSkin("Default")
+	Main:DockPadding(4, 29, 4, 4)
 
 	Cache.Menu = Main
 
@@ -1554,13 +1586,13 @@ do
 		Cache.Menu:MakePopup()
 	end))
 
-	Main._MenuItems = {}
+	Main._MenuItems = {{}, {}}
 
-	Main._Container = vgui.Create("DPanel", Main)
-	Main._Container:SetSize(Main:GetSize())
+	Main._Left = vgui.Create("DPanel", Main)
+	Main._Right = vgui.Create("DPanel", Main)
 
-	function Main:AddCheckbox(Inline, Indent, Label, Table, Key)
-		local Checkbox = vgui.Create("DCheckBoxLabel", self._Container)
+	function Main:AddCheckbox(Side, Inline, Indent, Label, Table, Key)
+		local Checkbox = vgui.Create("DCheckBoxLabel", Side == 1 and self._Left or self._Right)
 		Checkbox:SetTextColor(Cache.Colors.Black)
 		Checkbox:SetText(Label)
 		Checkbox:SetSkin("Default")
@@ -1576,17 +1608,16 @@ do
 			self._Table[self._Key] = NewValue
 		end
 
-		self._MenuItems[#self._MenuItems + 1] = Checkbox
+		self._MenuItems[Side][#self._MenuItems[Side] + 1] = Checkbox
 
 		return Checkbox
 	end
 
-	function Main:AddSlider(Inline, Indent, Label, Min, Max, Decimals, Table, Key)
-		local Slider = vgui.Create("DNumSlider", self._Container)
+	function Main:AddSlider(Side, Inline, Indent, Label, Min, Max, Decimals, Table, Key)
+		local Slider = vgui.Create("DNumSlider", Side == 1 and self._Left or self._Right)
 		Slider:SetDark(true)
 		Slider:SetMinMax(Min, Max)
 		Slider:SetDecimals(Decimals)
-		Slider:SetWide(self:GetWide() - (Indent * 25) - 15)
 		Slider:SetSkin("Default")
 
 		Slider._Table = Table
@@ -1616,13 +1647,13 @@ do
 			self._Table[self._Key] = NewValue
 		end
 
-		self._MenuItems[#self._MenuItems + 1] = Slider
+		self._MenuItems[Side][#self._MenuItems[Side] + 1] = Slider
 
 		return Slider
 	end
 
-	function Main:AddBinder(Inline, Indent, Table, Key)
-		local Binder = vgui.Create("DBinder", self._Container)
+	function Main:AddBinder(Side, Inline, Indent, Table, Key)
+		local Binder = vgui.Create("DBinder", Side == 1 and self._Left or self._Right)
 		Binder:SetValue(Table[Key])
 		Binder:SetTall(15)
 		Binder:SetSkin("Default")
@@ -1636,13 +1667,13 @@ do
 			self._Table[self._Key] = NewValue
 		end
 
-		self._MenuItems[#self._MenuItems + 1] = Binder
+		self._MenuItems[Side][#self._MenuItems[Side] + 1] = Binder
 
 		return Binder
 	end
 
-	function Main:AddColorBox(Inline, Indent, Table, Key)
-		local ColorBox = vgui.Create("DButton", self._Container)
+	function Main:AddColorBox(Side, Inline, Indent, Table, Key)
+		local ColorBox = vgui.Create("DButton", Side == 1 and self._Left or self._Right)
 		ColorBox:SetSize(15, 15)
 		ColorBox:SetText("")
 
@@ -1722,7 +1753,7 @@ do
 			surface.DrawRect(1, 1, Width - 2, Height - 2)
 		end)
 
-		self._MenuItems[#self._MenuItems + 1] = ColorBox
+		self._MenuItems[Side][#self._MenuItems[Side] + 1] = ColorBox
 
 		return ColorBox
 	end
@@ -1731,55 +1762,76 @@ do
 	function Main:PerformLayout(Width, Height)
 		self:_OriginalPerformLayout(Width, Height)
 
-		self._Container:Dock(FILL)
-		self._Container:SetPos(0, 0)
-		self._Container:SetSize(Width, Height)
+		local Left, Top, Right, Bottom = self:GetDockPadding()
+		local WidthOffset = Left + Right
+		local HeightOffset = Top + Bottom
+		local Spacing = 4
 
-		local X, Y = 15, 15
+		self._Left:SetSize((Width / 2) - (WidthOffset / 2) - (Spacing / 2), Height - HeightOffset)
+		self._Left:SetPos(Left, Top)
+		self._Right:SetSize(self._Left:GetSize())
+		self._Right:SetPos(self._Left:GetX() + self._Left:GetWide() + Spacing, self._Left:GetY())
 
-		for i = 1, #self._MenuItems do
-			local v = self._MenuItems[i]
+		for MenuIndex = 1, #self._MenuItems do
+			local X, Y = 15, 15
 
-			if v._Inline then
-				Y = Y - 25
+			for i = 1, #self._MenuItems[MenuIndex] do
+				local v = self._MenuItems[MenuIndex][i]
+
+				if v._Inline then
+					Y = Y - 25
+				end
+
+				local LastItem = self._MenuItems[MenuIndex][i - 1]
+
+
+				if v:GetName() == "DNumSlider" then -- Sliders are sped
+					v:SetWide((MenuIndex == 1 and self._Left or self._Right):GetWide() - (v._Indent * 25) - 15)
+				end
+
+				-- Messy 1 liner, couldn't be fucked
+				v:SetPos(v._OverrideX and v._OverrideX:GetX() or X + (v._Inline and (LastItem and (LastItem:GetX() + LastItem:GetWide()) or 0) or 0) + (v._Indent * 25), Y - (v:GetName() == "DNumSlider" and 10 or 0))
+
+				Y = Y + 25
 			end
-
-			local LastItem = self._MenuItems[i - 1]
-
-			-- Messy 1 liner, couldn't be fucked
-			v:SetPos(v._OverrideX and v._OverrideX:GetX() or X + (v._Inline and (LastItem and (LastItem:GetX() + LastItem:GetWide()) or 0) or 0) + (v._Indent * 25), Y - (v:GetName() == "DNumSlider" and 10 or 0)) -- Sliders are sped
-
-			Y = Y + 25
 		end
 	end
 
-	Main:AddCheckbox(false, 0, "Enabled", ENV.Variables, "Enabled")
-	Main:AddCheckbox(false, 1, "On Key", ENV.Variables.Key, "Enabled")
-	Main:AddBinder(true, 0, ENV.Variables.Key, "Code")
-	Main:AddSlider(false, 1, "FOV", 0, 180, 0, ENV.Variables.FOV, "Amount")
-	Main:AddCheckbox(false, 2, "Outline", ENV.Variables.FOV.Visible, "Outline")
-	local FirstBox = Main:AddColorBox(true, 0, ENV.Variables.FOV.Colors, "Outline")
-	Main:AddCheckbox(false, 2, "Fill", ENV.Variables.FOV.Visible, "Fill")
-	Main:AddColorBox(true, 0, ENV.Variables.FOV.Colors, "Fill")._OverrideX = FirstBox
-	Main:AddCheckbox(false, 1, "Snap Lines", ENV.Variables.SnapLines, "Enabled")
-	Main:AddColorBox(true, 0, ENV.Variables.SnapLines, "Color")._OverrideX = FirstBox
-	Main:AddCheckbox(false, 1, "Silent", ENV.Variables, "Silent")
-	Main:AddCheckbox(false, 1, "Fix Movement", ENV.Variables, "FixMovement")
-	Main:AddCheckbox(false, 1, "Bullettime", ENV.Variables, "BulletTime")
-	Main:AddCheckbox(false, 1, "Anti Spread", ENV.Variables, "AntiSpread")
-	Main:AddCheckbox(false, 1, "Anti Recoil", ENV.Variables, "AntiRecoil")
-	Main:AddCheckbox(false, 1, "Auto Shoot", ENV.Variables.AutoShoot, "Enabled")
-	Main:AddCheckbox(false, 2, "Slow Fire", ENV.Variables.AutoShoot.Slow, "Enabled")
-	Main:AddSlider(false, 2, "Wait Time", 0, 3, 2, ENV.Variables.AutoShoot.Slow, "Amount")
-	Main:AddCheckbox(false, 1, "Auto Wall", ENV.Variables, "AutoWall")
-	Main:AddCheckbox(false, 1, "Anti Taunt", ENV.Variables, "AntiTaunt")
-	Main:AddCheckbox(false, 1, "Backtrack", ENV.Variables.Backtrack, "Enabled")
-	Main:AddSlider(false, 2, "Amount", 0, 0.2, 2, ENV.Variables.Backtrack, "Amount")
-	Main:AddCheckbox(false, 1, "Multi-point", ENV.Variables.MultiPoint, "Enabled")
-	Main:AddCheckbox(false, 2, "Head", ENV.Variables.MultiPoint.Hitboxes, HITGROUP_HEAD)
-	Main:AddCheckbox(false, 2, "Chest", ENV.Variables.MultiPoint.Hitboxes, HITGROUP_CHEST)
-	Main:AddCheckbox(false, 2, "Stomach", ENV.Variables.MultiPoint.Hitboxes, HITGROUP_STOMACH)
-	Main:AddCheckbox(false, 1, "Damage Logs", ENV.Variables, "DamageLogs")
+	Main:AddCheckbox(1, false, 0, "Enabled", ENV.Variables, "Enabled")
+	Main:AddCheckbox(1, false, 1, "On Key", ENV.Variables.Key, "Enabled")
+	Main:AddBinder(1, true, 0, ENV.Variables.Key, "Code")
+	Main:AddSlider(1, false, 1, "FOV", 0, 180, 0, ENV.Variables.FOV, "Amount")
+	Main:AddCheckbox(1, false, 2, "Outline", ENV.Variables.FOV.Visible, "Outline")
+	local FirstBox = Main:AddColorBox(1, true, 0, ENV.Variables.FOV.Colors, "Outline")
+	Main:AddCheckbox(1, false, 2, "Fill", ENV.Variables.FOV.Visible, "Fill")
+	Main:AddColorBox(1, true, 0, ENV.Variables.FOV.Colors, "Fill")._OverrideX = FirstBox
+	Main:AddCheckbox(1, false, 1, "Snap Lines", ENV.Variables.SnapLines, "Enabled")
+	Main:AddColorBox(1, true, 0, ENV.Variables.SnapLines, "Color")._OverrideX = FirstBox
+	Main:AddCheckbox(1, false, 1, "Silent", ENV.Variables, "Silent")
+	Main:AddCheckbox(1, false, 1, "Fix Movement", ENV.Variables, "FixMovement")
+	Main:AddCheckbox(1, false, 1, "Bullettime", ENV.Variables, "BulletTime")
+	Main:AddCheckbox(1, false, 1, "Anti Spread", ENV.Variables, "AntiSpread")
+	Main:AddCheckbox(1, false, 1, "Anti Recoil", ENV.Variables, "AntiRecoil")
+	Main:AddCheckbox(1, false, 1, "Auto Shoot", ENV.Variables.AutoShoot, "Enabled")
+	Main:AddCheckbox(1, false, 2, "Slow Fire", ENV.Variables.AutoShoot.Slow, "Enabled")
+	Main:AddSlider(1, false, 2, "Wait Time", 0, 3, 2, ENV.Variables.AutoShoot.Slow, "Amount")
+	Main:AddCheckbox(1, false, 1, "Auto Wall", ENV.Variables, "AutoWall")
+	Main:AddCheckbox(1, false, 1, "Anti Taunt", ENV.Variables, "AntiTaunt")
+	Main:AddCheckbox(1, false, 1, "Backtrack", ENV.Variables.Backtrack, "Enabled")
+	Main:AddSlider(1, false, 2, "Amount", 0, 0.2, 2, ENV.Variables.Backtrack, "Amount")
+	Main:AddCheckbox(1, false, 1, "Multi-point", ENV.Variables.MultiPoint, "Enabled")
+	Main:AddCheckbox(1, false, 2, "Head", ENV.Variables.MultiPoint.Hitboxes, HITGROUP_HEAD)
+	Main:AddCheckbox(1, false, 2, "Chest", ENV.Variables.MultiPoint.Hitboxes, HITGROUP_CHEST)
+	Main:AddCheckbox(1, false, 2, "Stomach", ENV.Variables.MultiPoint.Hitboxes, HITGROUP_STOMACH)
+	Main:AddCheckbox(1, false, 1, "Damage Logs", ENV.Variables, "DamageLogs")
+
+	Main:AddCheckbox(2, false, 0, "Ignore Spectators", ENV.Variables.IgnoreFlags, "Spectators")
+	Main:AddCheckbox(2, false, 0, "Ignore Friends", ENV.Variables.IgnoreFlags, "Friends")
+	Main:AddCheckbox(2, false, 0, "Ignore Buildmode", ENV.Variables.IgnoreFlags, "Buildmode")
+	Main:AddCheckbox(2, false, 0, "Ignore Godmode", ENV.Variables.IgnoreFlags, "Godmode")
+	Main:AddCheckbox(2, false, 0, "Ignore Opposing HVH", ENV.Variables.IgnoreFlags, "OpposingHVH")
+	Main:AddCheckbox(2, false, 0, "Ignore Protected", ENV.Variables.IgnoreFlags, "Protected")
+	Main:AddCheckbox(2, false, 0, "Ignore Invisible", ENV.Variables.IgnoreFlags, "Invisible")
 
 	Main:InvalidateLayout()
 end
