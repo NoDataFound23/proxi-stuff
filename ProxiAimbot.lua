@@ -1193,17 +1193,7 @@ do
 
 		local FrameTime = RealFrameTime()
 
-		Velocity:Set((Velocity * FrameTime / 25) - (Velocity * FrameTime / 66)) -- This isn't a pointer it's a newly created vector so it's fine to do this
-		Position:Add(Velocity)
-	end)
-
-	ENV.CreateFunction("PredictLocalPosition", function(Position)
-		local Velocity = Cache.LocalPlayer:GetAbsVelocity()
-		if Velocity:IsZero() then return end
-
-		local FrameTime = RealFrameTime()
-
-		Velocity:Set((Velocity * FrameTime / 25) + (Velocity * FrameTime / 66))
+		Velocity:Set((Velocity * FrameTime / 25) - (Velocity * FrameTime / Cache.iTickInterval)) -- This isn't a pointer it's a newly created vector so it's fine to do this
 		Position:Add(Velocity)
 	end)
 
@@ -1314,6 +1304,7 @@ do
 
 	-- Uh
 	Cache.TickInterval = ENV.engine.TickInterval()
+	Cache.iTickInterval = 1 / Cache.TickInterval
 	Cache.LocalPlayer = ENV.LocalPlayer()
 	Cache.FacingAngle = Cache.LocalPlayer:EyeAngles()
 
@@ -1879,7 +1870,9 @@ do
 
 		if Cache.AimbotData.Active and not Cache.AimbotData.Wait then
 			-- Yeah it's a big line of text is there a problem?
-			Log("Fired bullet towards '{Gray}", IsValid(Cache.AimbotData.Target) and Cache.AimbotData.Target:GetName() or "??UNKNOWN_PLAYER??", "{$Reset}' {Gray}({$Reset}Hitgroup: {Green}", Cache.AimbotData.Hitgroup, "{$Reset} {Gray}({Green}", Cache.HitgroupLookups[Cache.AimbotData.Hitgroup], "{Gray}) {$Reset}| Penetrations: {Green}", Cache.AimbotData.Penetrations, "{$Reset} | Backtrack Amount: ", Cache.AimbotData.BacktrackAmount == 0 and "{Red}" or (Cache.AimbotData.BacktrackAmount > Variables.Backtrack.Amount and "{Orange}" or "{Green}"), Cache.AimbotData.BacktrackAmount, " {$Reset}ms{Gray})")
+			local TargetVelocity = Cache.AimbotData.Target:GetAbsVelocity():Length()
+
+			Log("Fired bullet towards '{Gray}", IsValid(Cache.AimbotData.Target) and Cache.AimbotData.Target:GetName() or "??UNKNOWN_PLAYER??", "{$Reset}' {Gray}({$Reset}Hitgroup: {Green}", Cache.AimbotData.Hitgroup, "{$Reset} {Gray}({Green}", Cache.HitgroupLookups[Cache.AimbotData.Hitgroup], "{Gray}) {$Reset}| Penetrations: {Green}", Cache.AimbotData.Penetrations, "{$Reset} | Backtrack Amount: ", Cache.AimbotData.BacktrackAmount == 0 and "{Red}" or (Cache.AimbotData.BacktrackAmount > Variables.Backtrack.Amount and "{Orange}" or "{Green}"), Cache.AimbotData.BacktrackAmount, " {$Reset}ms | Velocity: ", TargetVelocity <= 1000 and "{Green}" or (TargetVelocity <= 2500 and "{Orange}" or "{Red}"), TargetVelocity, " {$Reset}HU/second{Gray})")
 			Cache.AimbotData.Wait = true -- Stop spam
 		end
 
@@ -1974,8 +1967,6 @@ do
 				else
 					PredictTargetPosition(Position, Target, IsBacktrack)
 				end
-
-				PredictLocalPosition(Position)
 
 				local Direction = (Position - Cache.LocalPlayer:EyePos()):Angle()
 
