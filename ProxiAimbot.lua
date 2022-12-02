@@ -1301,6 +1301,7 @@ do
 
 	Cache.ConVars.AntiSpread.ai_shot_bias_min = ENV.GetConVar("ai_shot_bias_min")
 	Cache.ConVars.AntiSpread.ai_shot_bias_max = ENV.GetConVar("ai_shot_bias_max")
+	Cache.ConVars.AntiSpread.sv_tfa_recoil_legacy = ENV.GetConVar("sv_tfa_recoil_legacy")
 
 	-- Uh
 	Cache.TickInterval = ENV.engine.TickInterval()
@@ -1526,6 +1527,44 @@ do
 		end
 
 		return false
+	end)
+
+	Cache.WeaponData.AntiSpread.BaseFunctions.tfa = ENV.RegisterFunction(function(Weapon, _, WeaponCone, ForwardAngle)
+		local Cone, Recoil = Weapon:CalculateConeRecoil()
+
+		local Yaw, Pitch = Weapon:ComputeBulletDeviation(1, 1, Cone)
+
+		local WeaponAngle = Angle(ForwardAngle)
+		local BulletAngle = Angle(WeaponAngle)
+
+		if Cache.ConVars.AntiSpread.sv_tfa_recoil_legacy:GetBool() then
+			WeaponAngle:Add(Cache.LocalPlayer:GetViewPunchAngles())
+		elseif Weapon:HasRecoilLUT() then
+			WeaponAngle:Add(Weapon:GetRecoilLUTAngle())
+		else
+			local PitchPunch = Weapon:GetViewPunchP()
+			local YawPunch = Weapon:GetViewPunchY()
+
+			PitchPunch = PitchPunch - PitchPunch * Cache.TickInterval
+			YawPunch = YawPunch - YawPunch * Cache.TickInterval
+
+			WeaponAngle.pitch = WeaponAngle.pitch + PitchPunch
+			WeaponAngle.yaw = WeaponAngle.yaw + YawPunch
+		end
+
+		WeaponAngle:Normalize()
+
+		local Up = BulletAngle:Up()
+		local Right = BulletAngle:Right()
+
+		BulletAngle:RotateAroundAxis(Up, Yaw)
+		BulletAngle:RotateAroundAxis(Right, Pitch)
+
+		local Difference = WeaponAngle - BulletAngle
+
+		ForwardAngle:Sub(Difference)
+
+		return true
 	end)
 
 	Cache.WeaponData.AntiSpread.BaseFunctions.cw = ENV.RegisterFunction(function(Weapon, Command, _, ForwardAngle)
