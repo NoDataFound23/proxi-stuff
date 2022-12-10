@@ -50,7 +50,11 @@ local Data = {
 				Color = nil -- Set later
 			},
 
-			Silent = true,
+			Silent = {
+				Enabled = true,
+				pSilent = false
+			},
+
 			FixMovement = true,
 			BulletTime = true,
 			AntiSpread = true,
@@ -1188,12 +1192,12 @@ do
 
 	-- Moves the position into place based off the entity's movement (Nothing advanced, just some simple velocity prediction)
 	ENV.CreateFunction("PredictTargetPosition", function(Position, Entity)
+		if not Cache.ConVars.cl_interpolate:GetBool() then return end
+
 		local Velocity = Entity:GetAbsVelocity()
 		if Velocity:IsZero() then return end
 
-		local FrameTime = RealFrameTime()
-
-		Velocity:Set((Velocity * FrameTime / 25) - (Velocity * FrameTime / Cache.iTickInterval)) -- This isn't a pointer it's a newly created vector so it's fine to do this
+		Velocity:Mul(RealFrameTime())
 		Position:Add(Velocity)
 	end)
 
@@ -1305,7 +1309,7 @@ do
 
 	-- Uh
 	Cache.TickInterval = ENV.engine.TickInterval()
-	Cache.iTickInterval = 1 / Cache.TickInterval
+	Cache.iTickInterval = ENV.math.floor(1 / Cache.TickInterval)
 	Cache.LocalPlayer = ENV.LocalPlayer()
 	Cache.FacingAngle = Cache.LocalPlayer:EyeAngles()
 
@@ -1601,7 +1605,7 @@ do
 	ENV.Log("Setting up menu")
 
 	local Main = vgui.Create("DFrame")
-	Main:SetSize(600, 625)
+	Main:SetSize(600, 650)
 	Main:Center()
 	Main:SetTitle("proxi Aimbot")
 	Main:SetVisible(false)
@@ -1788,6 +1792,25 @@ do
 		return ColorBox
 	end
 
+	function Main:AddButton(Side, Inline, Indent, Label, Action)
+		local Button = vgui.Create("DButton", Side == 1 and self._Left or self._Right)
+		Button:SetText(Label)
+		Button:SetTall(15)
+		Button:SetSkin("Default")
+
+		Button._Action = Action
+		Button._Indent = Indent
+		Button._Inline = Inline
+
+		function Button:DoClick()
+			self:_Action()
+		end
+
+		self._MenuItems[Side][#self._MenuItems[Side] + 1] = Button
+
+		return Button
+	end
+
 	Main._OriginalPerformLayout = Main.PerformLayout
 	function Main:PerformLayout(Width, Height)
 		self:_OriginalPerformLayout(Width, Height)
@@ -1837,7 +1860,8 @@ do
 	Main:AddColorBox(1, true, 0, ENV.Variables.FOV.Colors, "Fill")._OverrideX = FirstBox
 	Main:AddCheckbox(1, false, 1, "Snap Lines", ENV.Variables.SnapLines, "Enabled")
 	Main:AddColorBox(1, true, 0, ENV.Variables.SnapLines, "Color")._OverrideX = FirstBox
-	Main:AddCheckbox(1, false, 1, "Silent", ENV.Variables, "Silent")
+	Main:AddCheckbox(1, false, 1, "Silent", ENV.Variables.Silent, "Enabled")
+	Main:AddCheckbox(1, false, 2, "pSilent", ENV.Variables.Silent, "pSilent")
 	Main:AddCheckbox(1, false, 1, "Fix Movement", ENV.Variables, "FixMovement")
 	Main:AddCheckbox(1, false, 1, "Bullettime", ENV.Variables, "BulletTime")
 	Main:AddCheckbox(1, false, 1, "Anti Spread", ENV.Variables, "AntiSpread")
@@ -1862,6 +1886,9 @@ do
 	Main:AddCheckbox(2, false, 0, "Ignore Opposing HVH", ENV.Variables.IgnoreFlags, "OpposingHVH")
 	Main:AddCheckbox(2, false, 0, "Ignore Protected", ENV.Variables.IgnoreFlags, "Protected")
 	Main:AddCheckbox(2, false, 0, "Ignore Invisible", ENV.Variables.IgnoreFlags, "Invisible")
+	Main:AddButton(2, false, 0, "Toggle Lerp", ENV.RegisterFunction(function()
+		Cache.ConVars.cl_interpolate:ForceBool(not Cache.ConVars.cl_interpolate:GetBool())
+	end))
 
 	Main:InvalidateLayout()
 end
@@ -2021,12 +2048,17 @@ do
 					end
 				end
 
-				if not Variables.Silent then Cache.FacingAngle = Angle(Direction) end
+				if not Variables.Silent.Enabled then Cache.FacingAngle = Angle(Direction) end
 				if Variables.AntiSpread then CalculateAntiSpread(Weapon, Command, Direction) end
 				if Variables.AntiRecoil then Direction:Sub(CalculateAntiRecoil(Weapon)) end
 				FixAngle(Direction)
 
-				Command:SetViewAngles(Direction)
+				if (Variables.Silent.Enabled and not Variables.Silent.pSilent) or not Variables.Silent.Enabled then
+					Command:SetViewAngles(Direction)
+				else
+					Command:SetInWorldClicker(true)
+					Command:SetWorldClickerAngles(Direction:Forward())
+				end
 			proxi.EndPrediction()
 
 			if Variables.FixMovement then FixMovement(Command) end
