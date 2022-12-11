@@ -2,13 +2,9 @@
 	https://github.com/leme6156/proxi-stuff
 
 	For the noobs
-
-	Requires https://github.com/awesomeusername69420/miscellaneous-gmod-stuff/blob/main/Includes/modules/md5.lua
 ]]
 
-pcall(include, "includes/modules/md5.lua")
-
-local SpreadCones = {}
+local SpreadSeeds = {...} -- https://github.com/awesomeusername69420/miscellaneous-gmod-stuff/blob/main/Cheaterino/NoSpreadSeedGeneration.lua
 
 local function CalculateNoSpread(Weapon, cmd, pAngle)
 	local WeaponCone = SpreadCones[Weapon:GetClass()]
@@ -17,10 +13,10 @@ local function CalculateNoSpread(Weapon, cmd, pAngle)
 		return pAngle
 	end
 
-	local Seed = md5.PseudoRandom(cmd:CommandNumber())
+	local Seed = Command:GetRandomSeed()
 
-	local X = md5.EngineSpread[Seed][1]
-	local Y = md5.EngineSpread[Seed][2]
+	local X = SpreadSeeds[Seed].X
+	local Y = SpreadSeeds[Seed].Y
 
 	local Forward = pAngle:Forward()
 	local Right = pAngle:Right()
@@ -39,7 +35,7 @@ hook.Add("EntityFireBullets", "pt_EntityFireBullets", function(Entity, Data)
 	local Weapon = Entity:GetActiveWeapon()
 	if not IsValid(Weapon) then return end
 
-	SpreadCones[Weapon:GetClass()] = Data.Spread
+	SpreadSeeds[Weapon:GetClass()] = Data.Spread
 end)
 
 hook.Add("CreateMoveEx", "pt_CreateMoveEx", function(cmd)
