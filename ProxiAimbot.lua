@@ -714,7 +714,7 @@ do
 		local pMins = Vector(Mins.x + 1, Mins.y + 1, Mins.z + 1)
 		local pMaxs = Vector(Maxs.x - 1, Maxs.y - 1, Maxs.z - 1)
 
-		-- Auto-generation isn't needed here, it's just 8 the corners
+		-- Auto-generation isn't needed here, it's just the 8 corners
 		local Data = {
 			pMins,
 			pMaxs,
