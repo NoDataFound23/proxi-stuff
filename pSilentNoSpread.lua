@@ -4,6 +4,8 @@
 	For the noobs
 ]]
 
+require("proxi")
+
 local SpreadSeeds = {...} -- https://github.com/awesomeusername69420/miscellaneous-gmod-stuff/blob/main/Cheaterino/NoSpreadSeedGeneration.lua
 
 local function CalculateNoSpread(Weapon, cmd, pAngle)
