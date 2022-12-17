@@ -2,6 +2,8 @@
 	Hit or miss rapidfire / doubletap (I probably need to tweak my numbers better, oh well)
 ]]
 
+require("proxi")
+
 local TICK_INTERVAL = engine.TickInterval()
 local DownLast = false
 
