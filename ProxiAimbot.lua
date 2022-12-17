@@ -1197,7 +1197,11 @@ do
 		local Velocity = Entity:GetAbsVelocity()
 		if Velocity:IsZero() then return end
 
-		Velocity:Mul(RealFrameTime())
+		local FrameTime = RealFrameTime()
+		local InterpolationTime = GetInterpolationTime()
+		local Difference = math.max(FrameTime, InterpolationTime) - math.min(FrameTime, InterpolationTime)
+
+		Velocity:Mul(FrameTime + Difference)
 		Position:Add(Velocity)
 	end)
 
