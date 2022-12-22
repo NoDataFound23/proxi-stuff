@@ -1785,7 +1785,6 @@ do
 		ColorBox.Paint = Data.Environment.RegisterFunction(function(self, Width, Height)
 			surface.SetDrawColor(Cache.Colors.Black)
 			surface.DrawRect(0, 0, Width, Height)
-			surface.DrawOutlinedRect(0, 0, Width, Height)
 
 			surface.SetDrawColor(self._Table[self._Key])
 			surface.DrawRect(1, 1, Width - 2, Height - 2)
