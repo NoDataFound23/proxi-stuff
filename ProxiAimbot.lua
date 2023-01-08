@@ -656,7 +656,7 @@ do
 		local ScreenPosition = Position:ToScreen()
 		local Radius = GetFOVRadius()
 
-		if ScreenPosition.Visible and Radius >= 0 then
+		if ScreenPosition.visible and Radius >= 0 then
 			return math.Distance(Cache.ScreenData.Center.X, Cache.ScreenData.Center.Y, ScreenPosition.x, ScreenPosition.y), true
 		else
 			local Forward = Cache.ViewData.Angles:Forward()
@@ -886,6 +886,7 @@ do
 
 				for i = 1, #CurrentHitboxes[Hitgroup] do
 					local CurrentPosition = CurrentHitboxes[Hitgroup][i]
+					if not CurrentPosition then continue end
 
 					local pInFOV, pDistance = InFOV(CurrentPosition)
 					if not pInFOV then continue end
@@ -1198,10 +1199,10 @@ do
 		if Velocity:IsZero() then return end
 
 		local FrameTime = RealFrameTime()
-		local InterpolationTime = GetInterpolationTime()
-		local Difference = math.max(FrameTime, InterpolationTime) - math.min(FrameTime, InterpolationTime)
+		--local InterpolationTime = GetInterpolationTime()
+		--local Difference = math.max(FrameTime, InterpolationTime) - math.min(FrameTime, InterpolationTime)
 
-		Velocity:Mul(FrameTime + Difference)
+		Velocity:Mul(FrameTime)
 		Position:Add(Velocity)
 	end)
 
